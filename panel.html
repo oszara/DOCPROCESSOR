@@ -1,0 +1,2129 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>NEXUS Ω — Doc Processor v3</title>
+<!-- PWA -->
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#00e5ff">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="NEXUS Ω">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow:wght@300;400;600;700&display=swap');
+:root{
+  --bg:#070b12;--surface:#0d1320;--surface2:#111827;
+  --border:#1a2840;--accent:#00e5ff;--accent2:#00ff9d;
+  --warn:#ff6b35;--purple:#a78bfa;--yellow:#fbbf24;
+  --text:#c8daf0;--muted:#3a5068;--radius:6px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'Barlow',sans-serif;min-height:100vh;}
+body::before{content:'';position:fixed;inset:0;
+  background-image:linear-gradient(rgba(0,229,255,.03) 1px,transparent 1px),
+  linear-gradient(90deg,rgba(0,229,255,.03) 1px,transparent 1px);
+  background-size:40px 40px;pointer-events:none;z-index:0;}
+
+header{position:relative;z-index:10;padding:18px 32px 14px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;}
+.logo{font-family:'Share Tech Mono',monospace;font-size:1.2rem;color:var(--accent);letter-spacing:3px;
+  text-shadow:0 0 20px rgba(0,229,255,.4);}
+.logo span{color:var(--accent2);}
+#status-dot{display:flex;align-items:center;gap:6px;font-family:'Share Tech Mono',monospace;font-size:.7rem;color:var(--muted);}
+#status-dot .dot{width:7px;height:7px;border-radius:50%;background:var(--muted);}
+#status-dot.online .dot{background:var(--accent2);box-shadow:0 0 8px var(--accent2);animation:pulse 2s infinite;}
+#status-dot.online{color:var(--accent2);}
+#status-dot.offline .dot{background:var(--warn);}
+#status-dot.offline{color:var(--warn);}
+@keyframes pulse{0%,100%{box-shadow:0 0 4px var(--accent2);}50%{box-shadow:0 0 16px var(--accent2);}}
+
+.container{position:relative;z-index:5;max-width:1060px;margin:0 auto;padding:26px 18px 80px;}
+
+/* TABS */
+.tabs{display:flex;gap:2px;margin-bottom:26px;border-bottom:1px solid var(--border);overflow-x:auto;}
+.tab-btn{font-family:'Share Tech Mono',monospace;font-size:.68rem;letter-spacing:1px;white-space:nowrap;
+  padding:8px 16px;background:none;border:none;color:var(--muted);cursor:pointer;
+  border-bottom:2px solid transparent;margin-bottom:-1px;transition:.2s;text-transform:uppercase;}
+.tab-btn:hover{color:var(--text);}
+.tab-btn.active{color:var(--accent);border-bottom-color:var(--accent);}
+.tab-btn.tab-cycle{color:var(--accent2);}
+.tab-btn.tab-cycle.active{border-bottom-color:var(--accent2);}
+.tab-panel{display:none;}.tab-panel.active{display:block;}
+
+/* CARD */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  padding:22px 26px;margin-bottom:14px;}
+.card-title{font-family:'Share Tech Mono',monospace;font-size:.65rem;letter-spacing:2px;
+  color:var(--accent);text-transform:uppercase;margin-bottom:16px;
+  display:flex;align-items:center;gap:8px;}
+.card-title::after{content:'';flex:1;height:1px;background:var(--border);}
+.card-title.green{color:var(--accent2);}
+
+/* FORM */
+label{display:block;font-size:.7rem;color:var(--muted);margin-bottom:4px;
+  font-family:'Share Tech Mono',monospace;letter-spacing:1px;text-transform:uppercase;}
+input[type="text"],textarea,select{width:100%;background:var(--bg);border:1px solid var(--border);
+  border-radius:var(--radius);color:var(--text);font-family:'Share Tech Mono',monospace;
+  font-size:.8rem;padding:8px 12px;margin-bottom:12px;outline:none;transition:.2s;}
+input:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 2px rgba(0,229,255,.08);}
+textarea{resize:vertical;}
+
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;gap:6px;font-family:'Share Tech Mono',monospace;
+  font-size:.7rem;letter-spacing:1px;text-transform:uppercase;padding:9px 18px;
+  border-radius:var(--radius);border:none;cursor:pointer;transition:.2s;}
+.btn-lg{font-size:.78rem;padding:12px 24px;}
+.btn-primary{background:var(--accent);color:#000;font-weight:700;}
+.btn-primary:hover{background:#33eeff;box-shadow:0 0 18px rgba(0,229,255,.3);}
+.btn-primary:disabled{background:var(--muted);cursor:not-allowed;box-shadow:none;}
+.btn-green{background:var(--accent2);color:#000;font-weight:700;}
+.btn-green:hover{background:#33ffb5;box-shadow:0 0 18px rgba(0,255,157,.3);}
+.btn-green:disabled{background:var(--muted);cursor:not-allowed;}
+.btn-yellow{background:var(--yellow);color:#000;font-weight:700;}
+.btn-yellow:hover{filter:brightness(1.1);}
+.btn-yellow:disabled{background:var(--muted);cursor:not-allowed;}
+.btn-secondary{background:transparent;color:var(--accent2);border:1px solid var(--accent2);}
+.btn-secondary:hover{background:rgba(0,255,157,.08);}
+.btn-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:6px;}
+
+/* FILE DROP */
+.file-drop{border:2px dashed var(--border);border-radius:var(--radius);padding:24px;
+  text-align:center;cursor:pointer;transition:.2s;margin-bottom:12px;position:relative;}
+.file-drop:hover,.file-drop.drag{border-color:var(--accent);background:rgba(0,229,255,.04);}
+.file-drop input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+.file-drop-text{font-family:'Share Tech Mono',monospace;font-size:.76rem;color:var(--muted);}
+.file-drop-text strong{color:var(--accent);}
+.fname{font-size:.74rem;font-family:'Share Tech Mono',monospace;color:var(--accent2);margin-top:5px;}
+
+/* GRID */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;}
+
+/* FIELDS GRID */
+.fields-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;margin-bottom:14px;}
+.field-item{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:9px 12px;}
+.field-key{font-size:.6rem;color:var(--muted);font-family:'Share Tech Mono',monospace;text-transform:uppercase;margin-bottom:3px;}
+.field-val{font-size:.74rem;color:var(--accent2);font-family:'Share Tech Mono',monospace;word-break:break-word;}
+
+/* TEMPLATES */
+.tpl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:14px;}
+.tpl-card{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);
+  padding:12px 14px;cursor:pointer;transition:.2s;}
+.tpl-card:hover{border-color:var(--accent);}
+.tpl-card.selected{border-color:var(--accent2);box-shadow:0 0 0 1px var(--accent2);}
+.tpl-card-name{font-family:'Share Tech Mono',monospace;font-size:.72rem;color:var(--text);word-break:break-all;margin-bottom:3px;}
+.tpl-card-meta{font-size:.64rem;color:var(--muted);}
+.tpl-badge{display:inline-block;padding:1px 6px;border-radius:3px;font-size:.6rem;
+  font-family:'Share Tech Mono',monospace;font-weight:700;margin-bottom:6px;}
+.badge-docx{background:rgba(0,229,255,.15);color:var(--accent);}
+.badge-xlsx{background:rgba(0,255,157,.15);color:var(--accent2);}
+.badge-pdf{background:rgba(255,107,53,.15);color:var(--warn);}
+
+/* PREVIEW TABLE */
+.preview-table{width:100%;border-collapse:collapse;font-family:'Share Tech Mono',monospace;font-size:.68rem;}
+.preview-table th{background:var(--surface2);color:var(--accent);padding:6px 9px;
+  text-align:left;border-bottom:1px solid var(--border);font-size:.6rem;text-transform:uppercase;}
+.preview-table td{padding:6px 9px;border-bottom:1px solid var(--border);color:var(--text);
+  max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
+/* DOWNLOAD BANNER */
+.dl-banner{background:rgba(0,255,157,.07);border:1px solid var(--accent2);border-radius:var(--radius);
+  padding:13px 18px;display:flex;align-items:center;justify-content:space-between;
+  gap:10px;margin-top:12px;flex-wrap:wrap;}
+.dl-info{font-family:'Share Tech Mono',monospace;font-size:.74rem;color:var(--accent2);}
+.dl-info span{color:var(--muted);font-size:.66rem;display:block;margin-top:2px;}
+
+/* CICLO VISUAL */
+.ciclo-bar{display:flex;align-items:center;justify-content:center;gap:0;
+  margin-bottom:28px;flex-wrap:wrap;gap:4px;}
+.ciclo-node{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  padding:10px 18px;text-align:center;cursor:pointer;transition:.2s;min-width:120px;}
+.ciclo-node.active{border-color:var(--accent);box-shadow:0 0 14px rgba(0,229,255,.12);}
+.ciclo-node.done{border-color:var(--accent2);background:rgba(0,255,157,.05);}
+.cn-icon{font-size:1.4rem;}
+.cn-label{font-family:'Share Tech Mono',monospace;font-size:.6rem;color:var(--muted);text-transform:uppercase;}
+.cn-name{font-family:'Share Tech Mono',monospace;font-size:.68rem;color:var(--text);margin-top:2px;}
+.ciclo-arrow{font-size:1.2rem;color:var(--muted);flex-shrink:0;}
+.ciclo-arrow.lit{color:var(--accent2);}
+
+/* RESPONSE BOX */
+.resp-box{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);
+  padding:12px;font-family:'Share Tech Mono',monospace;font-size:.72rem;
+  white-space:pre-wrap;word-break:break-all;max-height:200px;overflow-y:auto;
+  color:var(--accent2);margin-top:12px;}
+
+/* LOG */
+#log{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);
+  padding:12px;min-height:80px;max-height:220px;overflow-y:auto;
+  font-family:'Share Tech Mono',monospace;font-size:.72rem;line-height:1.8;}
+.log-ok{color:var(--accent2);}.log-err{color:var(--warn);}.log-info{color:var(--accent);}.log-muted{color:var(--muted);}
+
+.spinner{display:inline-block;width:10px;height:10px;border:2px solid transparent;
+  border-top-color:currentColor;border-radius:50%;animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.hint{font-size:.66rem;color:var(--muted);font-family:'Share Tech Mono',monospace;margin-top:-8px;margin-bottom:10px;}
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-family:'Share Tech Mono',monospace;font-size:.62rem;font-weight:700;}
+.badge-ok{background:rgba(0,255,157,.15);color:var(--accent2);}
+.badge-warn{background:rgba(255,107,53,.15);color:var(--warn);}
+::-webkit-scrollbar{width:4px;}::-webkit-scrollbar-track{background:var(--bg);}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+@media(max-width:640px){.grid2,.grid3{grid-template-columns:1fr;}.ciclo-arrow{display:none;}}
+
+/* PWA INSTALL BANNER */
+#pwa-banner{position:fixed;bottom:0;left:0;right:0;z-index:9999;
+  background:var(--surface);border-top:1px solid var(--accent2);
+  padding:12px 20px;display:none;align-items:center;justify-content:space-between;
+  gap:12px;flex-wrap:wrap;box-shadow:0 -4px 20px rgba(0,255,157,.15);}
+#pwa-banner.show{display:flex;}
+.pwa-msg{font-family:'Share Tech Mono',monospace;font-size:.74rem;color:var(--accent2);}
+.pwa-msg span{color:var(--muted);font-size:.66rem;display:block;margin-top:2px;}
+.pwa-btns{display:flex;gap:8px;}
+</style>
+</head>
+<body>
+
+<!-- PWA INSTALL BANNER -->
+<div id="pwa-banner">
+  <div class="pwa-msg">
+    📱 Instalar NEXUS Ω como app
+    <span>Funciona en celular y PC sin conexión parcial</span>
+  </div>
+  <div class="pwa-btns">
+    <button class="btn btn-green" onclick="instalarPWA()" style="font-size:.7rem;padding:8px 16px">
+      ⚡ Instalar app
+    </button>
+    <button class="btn btn-secondary" onclick="cerrarBanner()" style="font-size:.66rem;padding:6px 12px">
+      Ahora no
+    </button>
+  </div>
+</div>
+<header>
+  <div class="logo">NEXUS <span>Ω</span> — DOC PROCESSOR <span style="font-size:.65rem;color:var(--muted);letter-spacing:1px"> v3.0</span></div>
+  <div id="status-dot"><div class="dot"></div><span id="status-text">Verificando...</span></div>
+</header>
+
+<div class="container">
+<div class="tabs">
+  <button class="tab-btn tab-cycle active" onclick="switchTab('ciclo',this)">🔄 Ciclo Documental</button>
+  <button class="tab-btn"                  onclick="switchTab('plantillas',this)">🗂 Plantillas</button>
+  <button class="tab-btn"                  onclick="switchTab('excel',this)">📊 Excel</button>
+  <button class="tab-btn"                  onclick="switchTab('word',this)">📄 Word</button>
+  <button class="tab-btn"                  onclick="switchTab('pdf',this)">🔍 PDF</button>
+  <button class="tab-btn"                  onclick="switchTab('tablero',this)">📊 Tablero General</button>
+  <button class="tab-btn"                  onclick="switchTab('tablero',this)">📊 Tablero Inicios</button>
+  <button class="tab-btn"                  onclick="switchTab('tablero-aud',this)">🏛 Tablero Audiencias</button>
+  <button class="tab-btn"                  onclick="switchTab('audiencias',this)">📋 Reporte Audiencias</button>
+  <button class="tab-btn"                  onclick="switchTab('log',this)">🖥 Log</button>
+</div>
+
+<!-- ══════════════════════════════════════
+     TAB: CICLO DOCUMENTAL
+══════════════════════════════════════ -->
+<div id="tab-ciclo" class="tab-panel active">
+
+  <!-- BARRA DE CICLO -->
+  <div class="ciclo-bar">
+    <div class="ciclo-node active" id="cn1" onclick="goStep(1)">
+      <div class="cn-icon">📋</div>
+      <div class="cn-label">Paso 1</div>
+      <div class="cn-name">Entrevista → Reporte</div>
+    </div>
+    <div class="ciclo-arrow" id="ca1">→</div>
+    <div class="ciclo-node" id="cn2" onclick="goStep(2)">
+      <div class="cn-icon">📊</div>
+      <div class="cn-label">Paso 2</div>
+      <div class="cn-name">Reporte → Novedades</div>
+    </div>
+    <div class="ciclo-arrow" id="ca2">→</div>
+    <div class="ciclo-node" id="cn3" onclick="goStep(3)">
+      <div class="cn-icon">✅</div>
+      <div class="cn-label">Resumen</div>
+      <div class="cn-name">Ciclo completado</div>
+    </div>
+  </div>
+
+  <!-- PASO 1 -->
+  <div id="step1" class="step-panel">
+    <!-- TEXTO DE ENTREVISTA -->
+    <div class="card">
+      <div class="card-title green">Paso 1 · Pega la entrevista → completa los datos → genera Reporte</div>
+      <div style="font-family:'Share Tech Mono',monospace;font-size:.72rem;color:var(--muted);margin-bottom:10px">
+        Pega el texto en <strong style="color:var(--accent)">cualquier formato</strong>: narración libre, formulario, dictado, bullet points, Word...
+        El sistema extrae lo que puede y tú completas lo que falte.
+      </div>
+      <textarea id="entrevista-text" style="min-height:200px;font-size:.78rem"
+        placeholder="Pega aquí cualquier forma de entrevista:
+
+— Formato libre: 'Me llamo María González, vengo a denunciar que el día 10 de marzo mi esposo Juan Pérez me golpeó...'
+— Formulario: 'DELITO: Violencia Familiar / IMPUTADO: Juan Pérez Gómez / VICTIMA: María González...'
+— Dictado: 'Comparece María González a denunciar lesiones cometidas por su pareja...'
+— Word pegado: cualquier texto copiado del documento Word
+
+No importa el formato — el sistema se adapta."></textarea>
+      <!-- Drop zona: foto o PDF de la entrevista -->
+      <div class="file-drop mini-drop" id="drop-entrevista-ocr"
+           style="margin-top:10px;padding:10px 14px;display:flex;align-items:center;gap:12px;cursor:pointer"
+           onclick="document.getElementById('inp-entrevista-ocr').click()">
+        <input type="file" id="inp-entrevista-ocr" style="display:none"
+               accept=".pdf,.jpg,.jpeg,.png,.bmp,.tiff"
+               onchange="subirArchivoTexto(this,'entrevista-text')">
+        <span style="font-size:1.4rem">📎</span>
+        <div class="file-drop-text">
+          <strong>Sube una foto o PDF del oficio</strong><br>
+          El sistema extrae el texto automáticamente (OCR)
+        </div>
+        <span id="st-entrevista-text" class="fname" style="margin-left:auto;font-size:.7rem"></span>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:10px">
+        <button class="btn btn-yellow" id="btn-analizar" onclick="analizarEntrevista()">
+          🔍 Analizar texto
+        </button>
+        <span style="font-family:'Share Tech Mono',monospace;font-size:.68rem;color:var(--muted)">
+          — o completa los campos de abajo directamente y presiona GENERAR
+        </span>
+      </div>
+    </div>
+
+    <!-- FORMULARIO SIEMPRE VISIBLE — el parser lo pre-llena, el fiscal completa lo que falte -->
+    <div class="card" id="analisis-card">
+      <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+        <span>Datos del caso <span id="badge-det" class="badge badge-ok" style="margin-left:6px">sin analizar aún</span></span>
+        <span style="font-family:'Share Tech Mono',monospace;font-size:.66rem;color:var(--muted)">
+          ✏️ Corrige o completa cualquier campo
+        </span>
+      </div>
+
+      <!-- Campos detectados (resumen visual) -->
+      <div id="fields-grid" class="fields-grid" style="margin-bottom:14px"></div>
+
+      <!-- FORMULARIO COMPLETO — siempre editable -->
+      <div style="border-top:1px solid var(--border);padding-top:16px">
+
+        <div class="grid3">
+          <!-- Col 1: Datos de la víctima y folio -->
+          <div>
+            <label>👤 Víctima (quien denuncia) <span style="color:var(--accent2)">*</span></label>
+            <input type="text" id="f-victima" placeholder="NOMBRE COMPLETO" autocomplete="off">
+
+            <label>📁 Folio NUC <span style="color:var(--accent2)">*</span></label>
+            <input type="text" id="f-folio" placeholder="190/2026" autocomplete="off">
+
+            <label>⚖️ Delito principal</label>
+            <input type="text" id="f-delito" placeholder="VIOLENCIA FAMILIAR" autocomplete="off"
+              style="text-transform:uppercase">
+          </div>
+
+          <!-- Col 2: Imputado y datos adicionales -->
+          <div>
+            <label>🔎 Imputado (agresor)</label>
+            <input type="text" id="f-imputado" placeholder="NOMBRE DEL AGRESOR" autocomplete="off">
+
+            <label>👮 Fiscal que recibe</label>
+            <input type="text" id="f-fiscal" placeholder="LIC. GERARDO JIMENEZ COLORADO" autocomplete="off">
+
+            <label>🔒 ¿Detenido?</label>
+            <select id="f-detenido" style="margin-bottom:12px">
+              <option value="NO">NO</option>
+              <option value="SI">SI</option>
+            </select>
+          </div>
+
+          <!-- Col 3: Configuración -->
+          <div>
+            <label>📋 Plantilla (en /plantillas)</label>
+            <input type="text" id="f-tpl" value="REPORTE_DIARIO.xlsx">
+
+            <label>💾 Nombre del archivo de salida</label>
+            <input type="text" id="f-out" value="REPORTE_DIARIO_ACTUALIZADO">
+
+            <label>📅 Fecha del hecho (si no se detectó)</label>
+            <input type="date" id="f-fecha" style="margin-bottom:12px">
+
+            <label>🏘 Municipio</label>
+            <input type="text" id="f-municipio" placeholder="Jalpa de Méndez" autocomplete="off">
+          </div>
+        </div>
+
+        <!-- Advertencia campos obligatorios -->
+        <div id="warn-campos" style="display:none;background:rgba(255,170,0,.1);border:1px solid var(--warn);
+          border-radius:6px;padding:10px 14px;font-family:'Share Tech Mono',monospace;
+          font-size:.72rem;color:var(--warn);margin-bottom:12px">
+          ⚠ Completa los campos marcados con * para poder generar el reporte
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-green btn-lg" id="btn-gen-rep" onclick="generarReporte()">
+          ⚡ GENERAR Y DESCARGAR Reporte Diario (.xlsx)
+        </button>
+      </div>
+      <div class="dl-banner" id="dl-reporte" style="display:none">
+        <div class="dl-info">✅ Reporte Diario generado: <strong id="dl-rep-name"></strong></div>
+        <button class="btn btn-primary" onclick="goStep(2)">Continuar → Paso 2 ▶</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PASO 2 -->
+  <div id="step2" class="step-panel" style="display:none">
+    <div class="card">
+      <div class="card-title green">Paso 2 · Inicios de Carpetas → Novedades</div>
+      <div class="hint" style="color:var(--text);font-size:.75rem;margin-bottom:14px">
+        El sistema lee todos los registros de la hoja "Inicios de Carpetas" y los mapea al formato de Novedades automáticamente.
+      </div>
+      <div class="grid2">
+        <div>
+          <label>Reporte Diario (en /plantillas)</label>
+          <input type="text" id="n-rep" value="REPORTE_DIARIO.xlsx">
+          <label>Filtrar por fecha (opcional)</label>
+          <input type="text" id="n-fecha" placeholder="2026-02-25 — vacío = todos">
+        </div>
+        <div>
+          <label>Plantilla Novedades (en /plantillas)</label>
+          <input type="text" id="n-nov" value="NOVEDADES.xlsx">
+          <label>Nombre del archivo de salida</label>
+          <input type="text" id="n-out" value="NOVEDADES_GENERADAS">
+        </div>
+      </div>
+      <div class="btn-row" style="margin-bottom:12px">
+        <button class="btn btn-yellow" id="btn-preview" onclick="previewInicios()">👁 Ver datos del Reporte</button>
+      </div>
+      <div id="preview-wrap" style="display:none;overflow-x:auto;margin-bottom:12px">
+        <div style="font-family:'Share Tech Mono',monospace;font-size:.62rem;color:var(--muted);margin-bottom:6px;text-transform:uppercase">
+          Inicios de Carpetas <span id="prev-count" class="badge badge-ok" style="margin-left:4px"></span>
+        </div>
+        <table class="preview-table">
+          <thead><tr><th>Folio</th><th>Delito</th><th>Víctima</th><th>Imputado</th><th>Municipio</th><th>Det.</th></tr></thead>
+          <tbody id="prev-tbody"></tbody>
+        </table>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-green btn-lg" id="btn-gen-nov" onclick="generarNovedades()">
+          ⚡ GENERAR Y DESCARGAR Novedades (.xlsx)
+        </button>
+        <button class="btn btn-secondary" onclick="goStep(1)">← Paso 1</button>
+      </div>
+      <div class="dl-banner" id="dl-novedades" style="display:none">
+        <div class="dl-info">✅ Novedades descargadas<span id="dl-nov-name"></span></div>
+        <button class="btn btn-primary" onclick="goStep(3)">Ver resumen →</button>
+      </div>
+    </div>
+
+    <!-- Subir reporte si aún no está en plantillas -->
+    <div class="card">
+      <div class="card-title">¿El Reporte recién descargado no está en /plantillas? Súbelo aquí</div>
+      <div class="file-drop" id="drop-rep2">
+        <input type="file" accept=".xlsx" onchange="subirArchivo(this,'rep2')">
+        <div class="file-drop-text"><strong>Arrastra el Reporte Diario .xlsx</strong><br>para agregarlo a /plantillas</div>
+      </div>
+      <div id="st-rep2" class="fname"></div>
+    </div>
+  </div>
+
+  <!-- PASO 3 -->
+  <div id="step3" class="step-panel" style="display:none">
+    <div class="card">
+      <div class="card-title green">Ciclo completado ✅</div>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:18px">
+        <div class="dl-banner" style="border-color:var(--accent);background:rgba(0,229,255,.05)">
+          <div class="dl-info" style="color:var(--accent)">📊 Reporte Diario (Inicios de Carpetas)<span id="sum-rep">—</span></div>
+        </div>
+        <div class="dl-banner">
+          <div class="dl-info">📄 Novedades (Detallado_foranea)<span id="sum-nov">—</span></div>
+        </div>
+      </div>
+      <button class="btn btn-primary btn-lg" onclick="reiniciarCiclo()">🔄 Nuevo ciclo</button>
+    </div>
+  </div>
+
+</div><!-- /tab-ciclo -->
+
+<!-- ══════════════════════════════════════
+     TAB: PLANTILLAS
+══════════════════════════════════════ -->
+<div id="tab-plantillas" class="tab-panel">
+  <div class="card">
+    <div class="card-title">1 · Cargar plantilla</div>
+    <div class="file-drop" id="drop-tpl">
+      <input type="file" accept=".docx,.xlsx,.pdf" onchange="subirPlantilla(this)">
+      <div class="file-drop-text"><strong>Arrastra tu plantilla aquí</strong><br>.docx · .xlsx · .pdf — el sistema aprende su estructura</div>
+    </div>
+    <div id="st-tpl" class="fname"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">2 · Plantillas guardadas
+      <button class="btn btn-secondary" style="margin-left:auto;padding:3px 10px;font-size:.62rem" onclick="cargarPlantillas()">↺ Actualizar</button>
+    </div>
+    <div id="tpl-grid" class="tpl-grid"><div style="color:var(--muted);font-size:.76rem;font-family:'Share Tech Mono',monospace">Cargando...</div></div>
+  </div>
+  <div class="card" id="analisis-tpl-card" style="display:none">
+    <div class="card-title">3 · Estructura detectada</div>
+    <div id="analisis-tpl-box" style="font-family:'Share Tech Mono',monospace;font-size:.74rem;color:var(--accent2);margin-bottom:14px"></div>
+    <button class="btn btn-purple" onclick="mostrarRelleno()" style="background:var(--purple);color:#000;font-weight:700;font-family:'Share Tech Mono',monospace;font-size:.72rem;padding:9px 18px;border-radius:var(--radius);border:none;cursor:pointer;">✏️ Rellenar esta plantilla →</button>
+  </div>
+  <!-- FILL WORD -->
+  <div class="card" id="fill-word-card" style="display:none">
+    <div class="card-title">4 · Rellenar plantilla Word</div>
+    <label>Archivo de salida</label><input type="text" id="fw-out" value="documento_rellenado">
+    <label>Campos {{}} — escribe los valores</label>
+    <div id="fw-fields"></div>
+    <div id="fw-tabla-sec" style="display:none">
+      <label>Datos para tabla (JSON)</label>
+      <textarea id="fw-tabla" style="min-height:70px">[]</textarea>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-green" id="btn-fw" onclick="rellenarWord()">⚡ Generar Word rellenado</button>
+      <button class="btn btn-secondary" style="font-size:.66rem;padding:6px 12px" onclick="agregarCampo('fw-fields')">+ Campo</button>
+    </div>
+  </div>
+  <!-- FILL EXCEL -->
+  <div class="card" id="fill-excel-card" style="display:none">
+    <div class="card-title">4 · Rellenar plantilla Excel</div>
+    <label>Archivo de salida</label><input type="text" id="fe-out" value="excel_rellenado">
+    <div id="fe-cols-info"></div>
+    <label>Filas a agregar (JSON array)</label>
+    <textarea id="fe-data">[]</textarea>
+    <div class="hint" id="fe-hint">▸ Usa los mismos encabezados de la plantilla</div>
+    <button class="btn btn-green" id="btn-fe" onclick="rellenarExcel()">⚡ Agregar datos al Excel</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     TAB: EXCEL
+══════════════════════════════════════ -->
+<div id="tab-excel" class="tab-panel">
+  <div class="card">
+    <div class="card-title">Generar Excel desde JSON</div>
+    <div class="grid2">
+      <div><label>Nombre del archivo</label><input type="text" id="xl-name" value="reporte"></div>
+      <div><label>Nombre de la hoja</label><input type="text" id="xl-sheet" value="Datos"></div>
+    </div>
+    <label>Datos (array JSON)</label>
+    <textarea id="xl-data">[
+  {"Nombre":"Ana García","Departamento":"Ventas","Salario":45000},
+  {"Nombre":"Carlos López","Departamento":"TI","Salario":52000}
+]</textarea>
+    <button class="btn btn-primary" id="btn-xl" onclick="generateExcel()">⚡ Generar y Descargar .xlsx</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     TAB: WORD
+══════════════════════════════════════ -->
+<div id="tab-word" class="tab-panel">
+  <div class="card">
+    <div class="card-title">Generar Word desde texto</div>
+    <label>Nombre del archivo</label><input type="text" id="wd-name" value="documento">
+    <label>Título</label><input type="text" id="wd-title" value="Documento generado por NEXUS Ω">
+    <label>Párrafos (uno por línea)</label>
+    <textarea id="wd-paras">Escribe aquí el contenido del documento.
+Cada línea se convierte en un párrafo separado.</textarea>
+    <button class="btn btn-primary" id="btn-wd" onclick="generateWord()">⚡ Generar y Descargar .docx</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     TAB: PDF
+══════════════════════════════════════ -->
+<div id="tab-pdf" class="tab-panel">
+  <div class="card">
+    <div class="card-title">Extraer texto de PDF</div>
+    <div class="file-drop" id="drop-pdf">
+      <input type="file" accept=".pdf" onchange="seleccionarPDF(this)">
+      <div class="file-drop-text"><strong>Arrastra tu PDF aquí</strong><br>o haz clic para seleccionar</div>
+    </div>
+    <div id="pdf-fname" class="fname"></div>
+    <button class="btn btn-primary" id="btn-pdf" onclick="extractPDF()" disabled>🔍 Extraer Texto</button>
+    <div id="pdf-resp" class="resp-box" style="display:none"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     TAB: TABLERO GENERAL
+══════════════════════════════════════ -->
+<div id="tab-tablero" class="tab-panel">
+
+  <!-- ESTADO DEL TABLERO -->
+  <div class="card" id="tablero-status-card">
+    <div class="card-title green">Tablero General — Registro acumulativo permanente</div>
+    <div id="tablero-no-existe" style="display:none">
+      <div style="font-family:'Share Tech Mono',monospace;font-size:.76rem;color:var(--warn);margin-bottom:14px">
+        ⚠️ El Tablero General aún no existe. Créalo para comenzar a acumular datos.
+      </div>
+      <button class="btn btn-primary btn-lg" onclick="crearTablro()">⚡ Crear Tablero General</button>
+    </div>
+    <div id="tablero-existe" style="display:none">
+      <div class="grid3" style="margin-bottom:14px">
+        <div class="field-item">
+          <div class="field-key">Última actualización</div>
+          <div class="field-val" id="t-ultima">—</div>
+        </div>
+        <div class="field-item">
+          <div class="field-key">Inicios de Carpetas</div>
+          <div class="field-val" id="t-count-inicios">0 registros</div>
+        </div>
+        <div class="field-item">
+          <div class="field-key">Audiencias</div>
+          <div class="field-val" id="t-count-aud">0 registros</div>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-green btn-lg" onclick="descargarTablro()">
+          ⬇️ DESCARGAR Tablero General (.xlsx)
+        </button>
+        <button class="btn btn-secondary" onclick="cargarInfoTablro()">↺ Actualizar info</button>
+        <button class="btn btn-secondary" style="color:var(--warn);border-color:var(--warn)" onclick="confirmarReiniciar()">
+          🗑 Reiniciar tablero
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SUBIR REPORTE → ACTUALIZAR TABLERO -->
+  <div class="card">
+    <div class="card-title">Subir Reporte Diario → se copia automáticamente al Tablero</div>
+    <div class="hint" style="color:var(--text);font-size:.75rem;margin-bottom:14px">
+      Cada vez que subes un Reporte Diario, el sistema extrae todos los datos nuevos
+      y los agrega al Tablero sin borrar lo que ya había. Los duplicados se detectan automáticamente.
+    </div>
+
+    <div class="file-drop" id="drop-tablero">
+      <input type="file" accept=".xlsx" onchange="subirReporteTablero(this)">
+      <div class="file-drop-text">
+        <strong>Arrastra el Reporte Diario .xlsx aquí</strong><br>
+        Se agrega al Tablero General automáticamente
+      </div>
+    </div>
+    <div id="tablero-fname" class="fname"></div>
+
+    <div style="display:flex;gap:20px;flex-wrap:wrap;margin-bottom:14px;margin-top:6px">
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;
+             font-family:'Share Tech Mono',monospace;font-size:.72rem;color:var(--text)">
+        <input type="checkbox" id="cb-inicios" checked style="width:auto;margin:0"> Inicios de Carpetas
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;
+             font-family:'Share Tech Mono',monospace;font-size:.72rem;color:var(--text)">
+        <input type="checkbox" id="cb-audiencias" checked style="width:auto;margin:0"> Audiencias
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;
+             font-family:'Share Tech Mono',monospace;font-size:.72rem;color:var(--text)">
+        <input type="checkbox" id="cb-novedades" style="width:auto;margin:0"> Novedades (si existe en el archivo)
+      </label>
+    </div>
+
+    <button class="btn btn-primary" id="btn-actualizar-tablero" onclick="actualizarConPlantilla()" style="display:none">
+      ⚡ Actualizar Tablero con archivo en /plantillas
+    </button>
+
+    <!-- RESULTADO DE ACTUALIZACIÓN -->
+    <div id="tablero-result" style="display:none">
+      <div class="dl-banner" id="tablero-update-banner">
+        <div>
+          <div class="dl-info" id="tablero-update-msg"></div>
+          <div id="tablero-stats" style="font-family:'Share Tech Mono',monospace;font-size:.68rem;color:var(--muted);margin-top:4px"></div>
+        </div>
+        <button class="btn btn-green" onclick="descargarTablro()">⬇️ Descargar Tablero</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PREVISUALIZACIÓN DEL TABLERO -->
+  <div class="card">
+    <div class="card-title">Vista del Tablero
+      <div style="display:flex;gap:6px;margin-left:auto">
+        <button class="btn btn-secondary" style="font-size:.62rem;padding:4px 10px"
+          onclick="previsualizarHoja('Inicios de Carpetas')">Inicios</button>
+        <button class="btn btn-secondary" style="font-size:.62rem;padding:4px 10px"
+          onclick="previsualizarHoja('Audiencias')">Audiencias</button>
+        <button class="btn btn-secondary" style="font-size:.62rem;padding:4px 10px"
+          onclick="previsualizarHoja('Novedades')">Novedades</button>
+      </div>
+    </div>
+
+    <div id="preview-tablero-wrap" style="display:none">
+      <div style="font-family:'Share Tech Mono',monospace;font-size:.62rem;color:var(--muted);margin-bottom:6px;text-transform:uppercase">
+        <span id="preview-sheet-name"></span>
+        <span id="preview-total" class="badge badge-ok" style="margin-left:6px"></span>
+        <span style="margin-left:8px;color:var(--warn)">(mostrando últimos 50)</span>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="preview-table" id="preview-tablero-table">
+          <thead id="preview-tablero-head"></thead>
+          <tbody id="preview-tablero-body"></tbody>
+        </table>
+      </div>
+    </div>
+    <div id="preview-tablero-empty" style="font-family:'Share Tech Mono',monospace;font-size:.74rem;color:var(--muted)">
+      Selecciona una hoja para previsualizar
+    </div>
+  </div>
+
+</div>
+
+<!-- ══════════════════════════════════════
+     TAB: TABLERO AUDIENCIAS
+══════════════════════════════════════ -->
+<div id="tab-tablero-aud" class="tab-panel">
+
+  <!-- ESTADO -->
+  <div class="card">
+    <div class="card-title green">Tablero de Audiencias — Registro acumulativo permanente</div>
+    <div class="hint" style="color:var(--text);font-size:.75rem;margin-bottom:14px">
+      Cada semana subes tu archivo de <strong style="color:var(--accent)">Resultados de Audiencia</strong>
+      y el sistema agrega automáticamente todos los registros nuevos sin borrar el historial anterior.
+      También puedes agregar reportes individuales desde texto directamente.
+    </div>
+
+    <div id="taud-no-existe" style="display:none">
+      <div style="font-family:'Share Tech Mono',monospace;font-size:.76rem;color:var(--warn);margin-bottom:14px">
+        ⚠️ El Tablero de Audiencias aún no existe. Créalo para comenzar.
+      </div>
+      <button class="btn btn-primary btn-lg" onclick="crearTablroAud()">⚡ Crear Tablero de Audiencias</button>
+    </div>
+
+    <div id="taud-existe" style="display:none">
+      <div class="grid3" style="margin-bottom:14px">
+        <div class="field-item">
+          <div class="field-key">Última actualización</div>
+          <div class="field-val" id="taud-ultima">—</div>
+        </div>
+        <div class="field-item">
+          <div class="field-key">Total registros acumulados</div>
+          <div class="field-val" id="taud-total" style="font-size:1.1rem">0</div>
+        </div>
+        <div class="field-item">
+          <div class="field-key">Estado</div>
+          <div class="field-val" style="color:var(--accent2)">✓ Activo</div>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-green btn-lg" onclick="descargarTablroAud()">
+          ⬇️ DESCARGAR Tablero Audiencias (.xlsx)
+        </button>
+        <button class="btn btn-secondary" onclick="cargarInfoTablroAud()">↺ Actualizar info</button>
+        <button class="btn btn-secondary" style="color:var(--warn);border-color:var(--warn)"
+          onclick="confirmarReiniciarAud()">🗑 Reiniciar tablero</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SUBIR EXCEL SEMANAL -->
+  <div class="card">
+    <div class="card-title">📥 Subir Excel semanal de Resultados de Audiencia</div>
+    <div class="hint" style="color:var(--text);font-size:.75rem;margin-bottom:12px">
+      Sube el archivo <strong style="color:var(--accent)">CPJ-JDM-RESULTADOS_AUDIENCIA_SEMANAL.xlsx</strong> cada semana.
+      El sistema detecta y agrega solo los registros nuevos — sin duplicar.
+    </div>
+    <div class="file-drop" id="drop-taud">
+      <input type="file" accept=".xlsx" onchange="subirExcelAud(this)">
+      <div class="file-drop-text">
+        <strong>Arrastra el Excel semanal de Audiencias aquí</strong><br>
+        Se acumula automáticamente al Tablero permanente
+      </div>
+    </div>
+    <div id="taud-fname" class="fname"></div>
+    <div id="taud-result" style="display:none;margin-top:10px">
+      <div class="dl-banner" id="taud-update-banner">
+        <div>
+          <div class="dl-info" id="taud-update-msg"></div>
+          <div id="taud-stats" style="font-family:'Share Tech Mono',monospace;font-size:.68rem;color:var(--muted);margin-top:4px"></div>
+        </div>
+        <button class="btn btn-green" onclick="descargarTablroAud()">⬇️ Descargar Tablero</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- AGREGAR REPORTE DE TEXTO DIRECTO AL TABLERO -->
+  <div class="card">
+    <div class="card-title">✏️ Agregar reporte individual desde texto → directo al Tablero</div>
+    <div class="hint" style="color:var(--text);font-size:.75rem;margin-bottom:12px">
+      Pega el texto del reporte de audiencia (WhatsApp, notas, etc.) y se agrega
+      directamente al Tablero sin necesidad de generar un Excel intermedio.
+    </div>
+    <textarea id="taud-texto" style="min-height:160px;font-size:.78rem"
+      placeholder="REPORTE DE AUDIENCIA .26 DE febrero 2026 (15:00) HORAS inicio 15:30
+CARPETA DE INVESTIGACION. - CI JDM 1013/2023
+NÚMERO DE CAUSA PENAL.- 621/2023.
+VICTIMA: Antonio Barjau Madrigal y Edith Cristal Valazquez Gómez
+DELITO: homicidio calificado
+INVESTIGADO: pedro acostá Jiménez
+DEFENSOR PUBLICO.- Lic. José Cristian Garcia López
+JUEZ.- LIC. Isabel ballinas
+AUDIENCIA: juicio individualizacion y pago de daños.
+RESOLUCION.- se condena a 40 años de prisión, 1460 días multa...
+FISCAL.- LIC. Karen Ramirez López"></textarea>
+    <div class="btn-row">
+      <button class="btn btn-green btn-lg" id="btn-taud-texto" onclick="agregarTextoAud()">
+        ⚡ Agregar al Tablero de Audiencias
+      </button>
+      <button class="btn btn-secondary" onclick="document.getElementById('taud-texto').value=''">✕ Limpiar</button>
+    </div>
+    <div class="dl-banner" id="taud-texto-result" style="display:none;margin-top:10px">
+      <div class="dl-info" id="taud-texto-msg"></div>
+      <button class="btn btn-green" onclick="descargarTablroAud()">⬇️ Descargar</button>
+    </div>
+  </div>
+
+  <!-- PREVISUALIZACIÓN -->
+  <div class="card">
+    <div class="card-title">Vista del Tablero de Audiencias
+      <button class="btn btn-secondary" style="margin-left:auto;font-size:.62rem;padding:4px 10px"
+        onclick="previsualizarAud()">↺ Cargar vista</button>
+    </div>
+    <div id="taud-preview-wrap" style="display:none">
+      <div style="font-family:'Share Tech Mono',monospace;font-size:.62rem;color:var(--muted);margin-bottom:6px">
+        <span id="taud-preview-total" class="badge badge-ok"></span>
+        <span style="margin-left:8px;color:var(--warn)">(mostrando últimos 50)</span>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="preview-table" id="taud-preview-table">
+          <thead id="taud-preview-head"></thead>
+          <tbody id="taud-preview-body"></tbody>
+        </table>
+      </div>
+    </div>
+    <div id="taud-preview-empty" style="font-family:'Share Tech Mono',monospace;font-size:.74rem;color:var(--muted)">
+      Haz clic en "Cargar vista" para ver los registros acumulados
+    </div>
+  </div>
+
+</div>
+
+<!-- ══════════════════════════════════════
+     TAB: AUDIENCIAS
+══════════════════════════════════════ -->
+<div id="tab-audiencias" class="tab-panel">
+
+  <!-- FLUJO VISUAL -->
+  <div class="ciclo-bar" style="margin-bottom:22px">
+    <div class="ciclo-node active" id="an1" onclick="audGoStep(1)">
+      <div class="cn-icon">📄</div>
+      <div class="cn-label">Opción A</div>
+      <div class="cn-name">PDF → Reporte</div>
+    </div>
+    <div class="ciclo-arrow">·</div>
+    <div class="ciclo-node" id="an2" onclick="audGoStep(2)">
+      <div class="cn-icon">✏️</div>
+      <div class="cn-label">Opción B</div>
+      <div class="cn-name">Manual → Reporte</div>
+    </div>
+  </div>
+
+  <!-- ═══ OPCIÓN A: PDF → REPORTE ═══ -->
+  <div id="aud-step1">
+    <div class="card">
+      <div class="card-title green">Opción A · Subir PDF del expediente → extrae y genera Reporte Word</div>
+      <div class="hint" style="color:var(--text);font-size:.75rem;margin-bottom:14px">
+        Sube el PDF del expediente, cédula o acuerdo. El sistema extrae todos los datos
+        y genera automáticamente el <strong style="color:var(--accent)">Word del Reporte de Audiencias Diarias</strong>.
+      </div>
+
+      <div class="file-drop" id="drop-pdf-aud">
+        <input type="file" accept=".pdf" onchange="selPDFAudiencia(this)">
+        <div class="file-drop-text"><strong>Arrastra el PDF del expediente aquí</strong><br>o haz clic para seleccionar</div>
+      </div>
+      <div id="pdf-aud-fname" class="fname"></div>
+
+      <div class="grid2" style="margin-top:10px">
+        <div>
+          <label>Municipio</label>
+          <select id="pdf-municipio" style="margin-bottom:12px">
+            <option>Jalpa de Méndez</option><option>Cárdenas</option><option>Centla</option>
+            <option>Comalcalco</option><option>Cunduacán</option><option>Huimanguillo</option>
+            <option>Macuspana</option><option>Nacajuca</option><option>Paraíso</option>
+            <option>Tacotalpa</option><option>Tenosique</option><option>Villahermosa</option>
+          </select>
+        </div>
+        <div>
+          <label>Nombre del archivo de salida</label>
+          <input type="text" id="pdf-out" value="REPORTE_AUDIENCIA">
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-yellow" id="btn-pdf-analizar" onclick="analizarPDFAudiencia()" disabled>
+          🔍 Extraer datos del PDF
+        </button>
+        <button class="btn btn-green btn-lg" id="btn-pdf-directo" onclick="pdfToReporteDirecto()" disabled>
+          ⚡ PDF → Word directo (todo en uno)
+        </button>
+      </div>
+    </div>
+
+    <!-- RESULTADO EXTRACCIÓN PDF -->
+    <div class="card" id="pdf-aud-result" style="display:none">
+      <div class="card-title">Datos extraídos del PDF <span id="pdf-aud-badge" class="badge badge-ok" style="margin-left:6px"></span></div>
+      <div id="pdf-aud-fields" class="fields-grid"></div>
+
+      <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px">
+        <div style="font-family:'Share Tech Mono',monospace;font-size:.66rem;color:var(--warn);margin-bottom:10px">
+          ✏️ REVISA Y COMPLETA LOS CAMPOS
+        </div>
+        <div class="grid3">
+          <div>
+            <label>Nº Carpeta (CI-JDM-xxx/yyyy)</label>
+            <input type="text" id="r-nuc" placeholder="CI-JDM-63/2024">
+            <label>Carpeta Adm. / Causa Penal</label>
+            <input type="text" id="r-causa" placeholder="57/2024">
+            <label>Fecha (ej: 25 de febrero de 2026)</label>
+            <input type="text" id="r-fecha" placeholder="25 de febrero de 2026">
+            <label>Hora (ej: 12:00)</label>
+            <input type="text" id="r-hora" placeholder="12:00">
+          </div>
+          <div>
+            <label>Tipo de Audiencia</label>
+            <select id="r-tipo" style="margin-bottom:12px">
+              <option value="">— seleccionar —</option>
+              <option>Audiencia Inicial</option>
+              <option>Audiencia Intermedia</option>
+              <option>Juicio Oral</option>
+              <option>Juicio en continuación</option>
+              <option>Procedimiento Abreviado</option>
+              <option>Suspensión Condicional del Proceso</option>
+              <option>Revisión de Medidas Cautelares</option>
+              <option>Orden de Cateo</option>
+            </select>
+            <label>Víctima u Ofendido</label>
+            <input type="text" id="r-victima" placeholder="Nombre completo o iniciales">
+            <label>Asesor Jurídico</label>
+            <input type="text" id="r-asesor" placeholder="Nombre del asesor">
+          </div>
+          <div>
+            <label>Imputado</label>
+            <input type="text" id="r-imputado" placeholder="Nombre del imputado">
+            <label>Defensor (Particular / Público)</label>
+            <input type="text" id="r-defensor" placeholder="LIC. NOMBRE DEFENSOR">
+            <label>Delito</label>
+            <input type="text" id="r-delito" placeholder="PEDERASTIA">
+            <label>Fiscal que interviene</label>
+            <input type="text" id="r-fiscal" placeholder="LIC. Karen Ramirez López">
+            <label>Juez de Control</label>
+            <input type="text" id="r-juez" placeholder="LIC. NOVELO">
+          </div>
+        </div>
+        <label>Observaciones / Resolución</label>
+        <textarea id="r-obs" style="min-height:100px" placeholder="La defensa justifica la inasistencia de sus testigos, señalan continuación para el día 16 de abril 2026 a las 08:30 horas..."></textarea>
+        <label>Nombre del archivo Word de salida</label>
+        <input type="text" id="r-out" value="REPORTE_AUDIENCIA">
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-green btn-lg" id="btn-gen-reporte-aud" onclick="generarReporteWord()">
+          ⚡ GENERAR Y DESCARGAR Reporte de Audiencias (.docx)
+        </button>
+      </div>
+      <div class="dl-banner" id="dl-reporte-aud" style="display:none">
+        <div class="dl-info">✅ Reporte Word descargado<span id="dl-aud-word-name"></span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ OPCIÓN B: MANUAL → REPORTE ═══ -->
+  <div id="aud-step2" style="display:none">
+    <div class="card">
+      <div class="card-title green">Opción B · Llenar manualmente → genera Reporte Word</div>
+      <div class="hint" style="color:var(--text);font-size:.75rem;margin-bottom:14px">
+        Pega el texto del reporte de audiencia (WhatsApp, notas, correo) o llena los campos directamente.
+        El sistema genera el Word con el formato oficial.
+      </div>
+      <label>Pegar texto de reporte (opcional — auto-rellena los campos)</label>
+      <textarea id="aud-txt-manual" style="min-height:130px;font-size:.78rem"
+        placeholder="Pega aquí el texto del reporte y presiona Analizar, o llena los campos directamente..."></textarea>
+      <!-- Drop zona: foto o PDF del reporte de audiencia -->
+      <div class="file-drop mini-drop" id="drop-aud-ocr"
+           style="margin-top:8px;margin-bottom:8px;padding:8px 14px;display:flex;align-items:center;gap:12px;cursor:pointer"
+           onclick="document.getElementById('inp-aud-ocr').click()">
+        <input type="file" id="inp-aud-ocr" style="display:none"
+               accept=".pdf,.jpg,.jpeg,.png,.bmp,.tiff"
+               onchange="subirArchivoTexto(this,'aud-txt-manual')">
+        <span style="font-size:1.3rem">📎</span>
+        <div class="file-drop-text">
+          <strong>Sube foto o PDF del reporte de audiencia</strong><br>
+          Extrae el texto y analiza automáticamente
+        </div>
+        <span id="st-aud-txt-manual" class="fname" style="margin-left:auto;font-size:.7rem"></span>
+      </div>
+      <button class="btn btn-yellow" id="btn-aud-txt-analizar" onclick="analizarTextoManual()" style="margin-bottom:14px">
+        🔍 Analizar texto
+      </button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Campos del reporte</div>
+      <div class="grid3">
+        <div>
+          <label>Municipio</label>
+          <select id="m-municipio" style="margin-bottom:12px">
+            <option>Jalpa de Méndez</option><option>Cárdenas</option><option>Centla</option>
+            <option>Comalcalco</option><option>Cunduacán</option><option>Huimanguillo</option>
+            <option>Macuspana</option><option>Nacajuca</option><option>Paraíso</option>
+            <option>Tacotalpa</option><option>Tenosique</option><option>Villahermosa</option>
+          </select>
+          <label>Fecha</label>
+          <input type="text" id="m-fecha" placeholder="25 de febrero de 2026">
+          <label>Hora</label>
+          <input type="text" id="m-hora" placeholder="12:00">
+          <label>Nº Carpeta</label>
+          <input type="text" id="m-nuc" placeholder="CI-JDM-63/2024">
+          <label>Carpeta Adm. / Causa Penal</label>
+          <input type="text" id="m-causa" placeholder="57/2024">
+        </div>
+        <div>
+          <label>Tipo de Audiencia</label>
+          <select id="m-tipo" style="margin-bottom:12px">
+            <option value="">— seleccionar —</option>
+            <option>Audiencia Inicial</option><option>Audiencia Intermedia</option>
+            <option>Juicio Oral</option><option>Juicio en continuación</option>
+            <option>Procedimiento Abreviado</option>
+            <option>Suspensión Condicional del Proceso</option>
+            <option>Revisión de Medidas Cautelares</option>
+          </select>
+          <label>Víctima u Ofendido</label>
+          <input type="text" id="m-victima" placeholder="M.S.H FELICITA BROCA GARCIA">
+          <label>Asesor Jurídico</label>
+          <input type="text" id="m-asesor" placeholder="">
+          <label>Imputado</label>
+          <input type="text" id="m-imputado" placeholder="SEBASTIÁN SEGOVIA JIMENEZ">
+        </div>
+        <div>
+          <label>Defensor (Particular / Público)</label>
+          <input type="text" id="m-defensor" placeholder="LIC. JOSE CRISTIAN GARCIA LÓPEZ">
+          <label>Delito</label>
+          <input type="text" id="m-delito" placeholder="PEDERASTIA">
+          <label>Fiscal que interviene</label>
+          <input type="text" id="m-fiscal" placeholder="LIC. KAREN RAMIREZ LOPEZ">
+          <label>Juez de Control</label>
+          <input type="text" id="m-juez" placeholder="LIC. NOVELO">
+          <label>Nombre del archivo</label>
+          <input type="text" id="m-out" value="REPORTE_AUDIENCIA">
+        </div>
+      </div>
+      <label>Observaciones / Resolución</label>
+      <textarea id="m-obs" style="min-height:110px" placeholder="La defensa justifica la inasistencia de sus testigos..."></textarea>
+
+      <div class="btn-row">
+        <button class="btn btn-green btn-lg" id="btn-gen-manual" onclick="generarReporteManual()">
+          ⚡ GENERAR Y DESCARGAR Reporte de Audiencias (.docx)
+        </button>
+      </div>
+      <div class="dl-banner" id="dl-manual-aud" style="display:none">
+        <div class="dl-info">✅ Reporte Word descargado<span id="dl-manual-name"></span></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ══════════════════════════════════════
+     TAB: LOG
+══════════════════════════════════════ -->
+<div id="tab-log" class="tab-panel">
+  <div class="card">
+    <div class="card-title">Log de actividad</div>
+    <div id="log"><span class="log-muted">// Esperando actividad...</span></div>
+    <br>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="clearLog()">Limpiar</button>
+      <button class="btn btn-secondary" onclick="checkHealth()">🔄 Ping servidor</button>
+    </div>
+  </div>
+</div>
+
+</div><!-- /container -->
+<script>
+const API='http://127.0.0.1:8000';
+let parsedFields={}, selectedTpl=null, tplAnalysis=null, selectedPDFFile=null;
+
+// ── TABLERO GENERAL ────────────────────────────────────
+async function cargarInfoTablro(){
+  try{
+    const r = await fetch(`${API}/api/tablero/info`);
+    const d = await r.json();
+    if(!r.ok) throw new Error(d.detail);
+
+    if(!d.existe){
+      document.getElementById('tablero-no-existe').style.display='block';
+      document.getElementById('tablero-existe').style.display='none';
+    } else {
+      document.getElementById('tablero-no-existe').style.display='none';
+      document.getElementById('tablero-existe').style.display='block';
+      document.getElementById('t-ultima').textContent = d.ultima_actualizacion||'—';
+      const ini = d.sheets['Inicios de Carpetas'];
+      const aud = d.sheets['Audiencias'];
+      document.getElementById('t-count-inicios').textContent =
+        ini ? `${ini.total_registros} registros` : '0 registros';
+      document.getElementById('t-count-aud').textContent =
+        aud ? `${aud.total_registros} registros` : '0 registros';
+    }
+  }catch(e){
+    document.getElementById('tablero-no-existe').style.display='block';
+    document.getElementById('tablero-existe').style.display='none';
+  }
+}
+
+async function crearTablro(){
+  log('Creando Tablero General...','info');
+  try{
+    const r = await fetch(`${API}/api/tablero/crear`,{method:'POST'});
+    const d = await r.json(); if(!r.ok) throw new Error(d.detail);
+    log('✅ Tablero General creado','ok');
+    cargarInfoTablro();
+  }catch(e){log('Error: '+e.message,'err');}
+}
+
+async function subirReporteTablero(input){
+  const file = input.files[0]; if(!file) return;
+  document.getElementById('tablero-fname').textContent = '▸ '+file.name+' — subiendo y actualizando...';
+  log('Subiendo '+file.name+' al Tablero...','info');
+
+  const form = new FormData();
+  form.append('file', file);
+  form.append('incluir_inicios', document.getElementById('cb-inicios').checked);
+  form.append('incluir_audiencias', document.getElementById('cb-audiencias').checked);
+  form.append('incluir_novedades', document.getElementById('cb-novedades').checked);
+
+  try{
+    const r = await fetch(`${API}/api/tablero/upload-reporte`,{method:'POST',body:form});
+    const d = await r.json(); if(!r.ok) throw new Error(d.detail);
+
+    // Mostrar resultado
+    let statsHtml = '';
+    for(const [hoja, s] of Object.entries(d.stats||{})){
+      statsHtml += `${hoja}: +${s.added} nuevos, ${s.skipped} ya existían  `;
+    }
+    document.getElementById('tablero-fname').textContent = '✓ '+file.name;
+    document.getElementById('tablero-update-msg').textContent =
+      `✅ Tablero actualizado — ${d.total_registros_nuevos} registros nuevos agregados`;
+    document.getElementById('tablero-stats').textContent = statsHtml;
+    document.getElementById('tablero-result').style.display='block';
+    document.getElementById('tablero-update-banner').scrollIntoView({behavior:'smooth'});
+    cargarInfoTablro();
+    log(`✅ Tablero: +${d.total_registros_nuevos} registros nuevos`,'ok');
+  }catch(e){
+    document.getElementById('tablero-fname').textContent='✗ Error: '+e.message;
+    log('Error: '+e.message,'err');
+  }
+}
+
+async function actualizarConPlantilla(){
+  const name = document.getElementById('tablero-fname').dataset.filename;
+  if(!name) return;
+  try{
+    const r = await fetch(`${API}/api/tablero/actualizar`,{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        reporte_filename: name,
+        incluir_inicios: document.getElementById('cb-inicios').checked,
+        incluir_audiencias: document.getElementById('cb-audiencias').checked,
+        incluir_novedades: document.getElementById('cb-novedades').checked,
+      })
+    });
+    const d = await r.json(); if(!r.ok) throw new Error(d.detail);
+    log(`✅ +${d.total_registros_nuevos} registros nuevos`,'ok');
+    cargarInfoTablro();
+  }catch(e){log('Error: '+e.message,'err');}
+}
+
+async function descargarTablro(){
+  log('Descargando Tablero General...','info');
+  try{
+    const r = await fetch(`${API}/api/tablero/descargar`);
+    if(!r.ok){const e=await r.json();throw new Error(e.detail);}
+    download(await r.blob(), 'TABLERO_GENERAL_NEXUS.xlsx');
+    log('✅ TABLERO_GENERAL_NEXUS.xlsx descargado','ok');
+  }catch(e){log('Error: '+e.message,'err');}
+}
+
+function confirmarReiniciar(){
+  if(confirm('⚠️ ¿Reiniciar el Tablero General?\nSe BORRARÁN todos los registros acumulados.\nEsta acción no se puede deshacer.')){
+    crearTablro();
+  }
+}
+
+async function previsualizarHoja(sheetName){
+  document.getElementById('preview-tablero-empty').style.display='none';
+  document.getElementById('preview-tablero-wrap').style.display='none';
+  log('Cargando '+sheetName+'...','info');
+  try{
+    const r = await fetch(`${API}/api/tablero/preview/${encodeURIComponent(sheetName)}?limit=50`);
+    const d = await r.json(); if(!r.ok) throw new Error(d.detail);
+
+    document.getElementById('preview-sheet-name').textContent = sheetName;
+    document.getElementById('preview-total').textContent = `${d.total} registros totales`;
+
+    // Headers — mostrar solo los primeros 8 para que quepa
+    const showHeaders = (d.headers||[]).slice(0,8);
+    const thead = document.getElementById('preview-tablero-head');
+    thead.innerHTML = '<tr>'+showHeaders.map(h=>`<th>${h||''}</th>`).join('')+'</tr>';
+
+    const tbody = document.getElementById('preview-tablero-body');
+    tbody.innerHTML = '';
+    d.rows.forEach(row=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = showHeaders.map(h=>{
+        const v = String(row[h]||'');
+        return `<td title="${v}">${v.length>30?v.substring(0,30)+'…':v}</td>`;
+      }).join('');
+      tbody.appendChild(tr);
+    });
+
+    document.getElementById('preview-tablero-wrap').style.display='block';
+    log(`Vista: ${d.rows.length} de ${d.total} registros en ${sheetName}`,'ok');
+  }catch(e){
+    document.getElementById('preview-tablero-empty').style.display='block';
+    document.getElementById('preview-tablero-empty').textContent = 'Error: '+e.message;
+    log('Error: '+e.message,'err');
+  }
+}
+
+// Drag & drop para tablero
+const dropTablero = document.getElementById('drop-tablero');
+dropTablero.addEventListener('dragover', e=>{e.preventDefault();dropTablero.classList.add('drag');});
+dropTablero.addEventListener('dragleave', ()=>dropTablero.classList.remove('drag'));
+dropTablero.addEventListener('drop', e=>{
+  e.preventDefault(); dropTablero.classList.remove('drag');
+  const f=e.dataTransfer.files[0];
+  if(f && f.name.endsWith('.xlsx')) subirReporteTablero({files:[f]});
+});
+
+// ── TABLERO AUDIENCIAS ────────────────────────────────
+async function cargarInfoTablroAud(){
+  try{
+    const r=await fetch(`${API}/api/tablero-aud/info`);
+    const d=await r.json(); if(!r.ok) throw new Error(d.detail);
+    if(!d.existe){
+      document.getElementById('taud-no-existe').style.display='block';
+      document.getElementById('taud-existe').style.display='none';
+    } else {
+      document.getElementById('taud-no-existe').style.display='none';
+      document.getElementById('taud-existe').style.display='block';
+      document.getElementById('taud-ultima').textContent = d.ultima_actualizacion||'—';
+      document.getElementById('taud-total').textContent  = d.total+' registros';
+    }
+  }catch(e){
+    document.getElementById('taud-no-existe').style.display='block';
+    document.getElementById('taud-existe').style.display='none';
+  }
+}
+
+async function crearTablroAud(){
+  log('Creando Tablero de Audiencias...','info');
+  try{
+    const r=await fetch(`${API}/api/tablero-aud/crear`,{method:'POST'});
+    const d=await r.json(); if(!r.ok) throw new Error(d.detail);
+    log('✅ Tablero de Audiencias creado','ok');
+    cargarInfoTablroAud();
+  }catch(e){log('Error: '+e.message,'err');}
+}
+
+async function subirExcelAud(input){
+  const file=input.files[0]; if(!file) return;
+  const fname=document.getElementById('taud-fname');
+  fname.textContent='▸ '+file.name+' — procesando...';
+  log('Actualizando Tablero Audiencias con '+file.name+'...','info');
+
+  const form=new FormData(); form.append('file',file);
+  try{
+    const r=await fetch(`${API}/api/tablero-aud/upload`,{method:'POST',body:form});
+    const d=await r.json(); if(!r.ok) throw new Error(d.detail);
+
+    fname.textContent='✓ '+file.name;
+    document.getElementById('taud-update-msg').textContent=
+      `✅ +${d.nuevos} registros nuevos — Total en tablero: ${d.total_en_tablero}`;
+    document.getElementById('taud-stats').textContent=
+      `Nuevos: ${d.nuevos}  |  Ya existían: ${d.ya_existian}  |  Actualizado: ${d.actualizado}`;
+    document.getElementById('taud-result').style.display='block';
+    document.getElementById('taud-update-banner').scrollIntoView({behavior:'smooth'});
+    cargarInfoTablroAud();
+    log(`✅ Tablero Audiencias: +${d.nuevos} nuevos, ${d.ya_existian} ya existían`,'ok');
+  }catch(e){
+    fname.textContent='✗ Error: '+e.message;
+    log('Error: '+e.message,'err');
+  }
+}
+
+async function agregarTextoAud(){
+  const texto=document.getElementById('taud-texto').value.trim();
+  if(!texto){log('Pega el reporte de audiencia primero','err');return;}
+  setBtn('btn-taud-texto',true);
+  log('Agregando reporte al Tablero de Audiencias...','info');
+  try{
+    const r=await fetch(`${API}/api/tablero-aud/agregar-texto`,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        texto_reporte:texto,
+        reporte_template:'CPJ-JDM-RESULTADOS_AUDIENCIA_PLANTILLA.xlsx',
+        output_filename:'temp'
+      })
+    });
+    const d=await r.json(); if(!r.ok) throw new Error(d.detail);
+
+    if(d.status==='duplicado'){
+      document.getElementById('taud-texto-msg').textContent='⚠️ '+d.message;
+      document.getElementById('taud-texto-result').style.display='flex';
+      log('Duplicado: '+d.message,'muted');
+    } else {
+      document.getElementById('taud-texto-msg').textContent=
+        `✅ Agregado en fila ${d.fila} — Total: ${d.total} registros`;
+      document.getElementById('taud-texto-result').style.display='flex';
+      document.getElementById('taud-texto-result').scrollIntoView({behavior:'smooth'});
+      cargarInfoTablroAud();
+      log(`✅ Registro agregado — Total tablero: ${d.total}`,'ok');
+    }
+  }catch(e){log('Error: '+e.message,'err');}
+  finally{setBtn('btn-taud-texto',false,'⚡ Agregar al Tablero de Audiencias');}
+}
+
+async function descargarTablroAud(){
+  log('Descargando Tablero de Audiencias...','info');
+  try{
+    const r=await fetch(`${API}/api/tablero-aud/descargar`);
+    if(!r.ok){const e=await r.json();throw new Error(e.detail);}
+    download(await r.blob(),'TABLERO_AUDIENCIAS_NEXUS.xlsx');
+    log('✅ TABLERO_AUDIENCIAS_NEXUS.xlsx descargado','ok');
+  }catch(e){log('Error: '+e.message,'err');}
+}
+
+function confirmarReiniciarAud(){
+  if(confirm('⚠️ ¿Reiniciar el Tablero de Audiencias?\nSe BORRARÁN todos los registros acumulados.\nEsta acción no se puede deshacer.')){
+    fetch(`${API}/api/tablero-aud/crear`,{method:'POST'})
+      .then(()=>{log('Tablero de Audiencias reiniciado','ok');cargarInfoTablroAud();})
+      .catch(e=>log('Error: '+e.message,'err'));
+  }
+}
+
+async function previsualizarAud(){
+  document.getElementById('taud-preview-empty').style.display='none';
+  log('Cargando vista del Tablero Audiencias...','info');
+  try{
+    const r=await fetch(`${API}/api/tablero-aud/preview?limit=50`);
+    const d=await r.json(); if(!r.ok) throw new Error(d.detail);
+
+    document.getElementById('taud-preview-total').textContent=`${d.total} registros totales`;
+
+    // Mostrar primeras 7 columnas (las más importantes)
+    const showCols=[0,1,2,3,4,6,7,8,9,11]; // NÚM,FECHA,HORA,CARPETA,CAUSA,VICTIMA,DELITO,IMPUTADO,TIPO,FISCAL
+    const headers=(d.headers||[]).filter((_,i)=>showCols.includes(i));
+
+    const thead=document.getElementById('taud-preview-head');
+    thead.innerHTML='<tr>'+headers.map(h=>`<th>${h}</th>`).join('')+'</tr>';
+
+    const tbody=document.getElementById('taud-preview-body');
+    tbody.innerHTML='';
+    d.rows.forEach(row=>{
+      const tr=document.createElement('tr');
+      tr.innerHTML=showCols.map(i=>{
+        const v=String(row[i]||'');
+        return `<td title="${v}">${v.length>28?v.substring(0,28)+'…':v}</td>`;
+      }).join('');
+      tbody.appendChild(tr);
+    });
+
+    document.getElementById('taud-preview-wrap').style.display='block';
+    log(`Vista: ${d.rows.length} de ${d.total} registros`,'ok');
+  }catch(e){
+    document.getElementById('taud-preview-empty').style.display='block';
+    document.getElementById('taud-preview-empty').textContent='Error: '+e.message;
+    log('Error: '+e.message,'err');
+  }
+}
+
+// Drag & drop tablero audiencias
+const dropTaud=document.getElementById('drop-taud');
+dropTaud.addEventListener('dragover',e=>{e.preventDefault();dropTaud.classList.add('drag');});
+dropTaud.addEventListener('dragleave',()=>dropTaud.classList.remove('drag'));
+dropTaud.addEventListener('drop',e=>{
+  e.preventDefault();dropTaud.classList.remove('drag');
+  const f=e.dataTransfer.files[0];
+  if(f&&f.name.endsWith('.xlsx'))subirExcelAud({files:[f]});
+});
+
+// Prellenar texto del reporte de audiencia si viene del mensaje
+window.addEventListener('DOMContentLoaded',()=>{
+  // Auto-llenar el reporte del mensaje actual si existe
+  const reporteActual = `REPORTE DE AUDIENCIA .26 DE febrero 2026 (15:00) HORAS inicio 15:30
+CARPETA DE INVESTIGACION. - CI JDM 1013/2023
+NÚMERO DE CAUSA PENAL.- 621/2023.
+VICTIMA: Antonio Barjau Madrigal y Edith Cristal Valazquez Gómez
+DELITO: homicidio calificado
+INVESTIGADO:  pedro acostá Jiménez
+DEFENSOR PUBLICO .- Lic. José Cristian Garcia López
+JUEZ.- LIC. Isabel ballinas
+AUDIENCIA: juicio individualizacion y pago de daños.
+RESOLUCION.-  se condena a 40 años de prisión, 1460 días multa de indemnización por cada víctima y de manera integral el pago de gastos funerarios
+FISCAL.- LIC. Karen Ramirez López`;
+  const ta=document.getElementById('taud-texto');
+  if(ta && !ta.value) ta.value=reporteActual;
+});
+
+// ── PWA ────────────────────────────────────────────────
+let deferredPrompt = null;
+
+// Registrar Service Worker
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .then(r => log('✓ PWA Service Worker registrado','ok'))
+      .catch(e => log('SW: '+e.message,'muted'));
+  });
+}
+
+// Capturar evento de instalación
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  // Mostrar banner solo si no está ya instalada
+  if (!window.matchMedia('(display-mode: standalone)').matches) {
+    setTimeout(() => document.getElementById('pwa-banner').classList.add('show'), 2000);
+  }
+});
+
+function instalarPWA() {
+  if (!deferredPrompt) {
+    // iOS: instrucción manual
+    alert('En iPhone/iPad:\n1. Toca el botón compartir ↑\n2. Selecciona "Agregar a pantalla de inicio"\n3. Toca "Agregar"');
+    return;
+  }
+  deferredPrompt.prompt();
+  deferredPrompt.userChoice.then(r => {
+    log(r.outcome === 'accepted' ? '✅ App instalada correctamente' : 'Instalación cancelada',
+        r.outcome === 'accepted' ? 'ok' : 'muted');
+    deferredPrompt = null;
+    cerrarBanner();
+  });
+}
+
+function cerrarBanner() {
+  document.getElementById('pwa-banner').classList.remove('show');
+}
+
+// Si viene de URL con ?tab=xxx, activar esa pestaña
+window.addEventListener('DOMContentLoaded', () => {
+  const params = new URLSearchParams(window.location.search);
+  const tab = params.get('tab');
+  if (tab) {
+    const btn = document.querySelector(`.tab-btn[onclick*="${tab}"]`);
+    if (btn) btn.click();
+  }
+});
+
+// ── UTILS ──────────────────────────────────────────────
+function log(msg,type='info'){
+  const el=document.getElementById('log');
+  const d=document.createElement('div');d.className='log-'+type;
+  const t=new Date().toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  d.textContent=`[${t}] ${msg}`;el.appendChild(d);el.scrollTop=el.scrollHeight;
+  const ph=el.querySelector('.log-muted');if(ph&&el.children.length>1)ph.remove();
+}
+function clearLog(){document.getElementById('log').innerHTML='<span class="log-muted">// Log limpiado.</span>';}
+function download(blob,filename){const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=filename;a.click();URL.revokeObjectURL(url);}
+function setBtn(id,loading,label){const b=document.getElementById(id);b.disabled=loading;b.innerHTML=loading?'<span class="spinner"></span> Procesando...':label;}
+
+// ── TABS ───────────────────────────────────────────────
+function switchTab(name,btn){
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');btn.classList.add('active');
+  if(name==='plantillas')cargarPlantillas();
+  if(name==='tablero')cargarInfoTablro();
+  if(name==='tablero-aud')cargarInfoTablroAud();
+}
+
+// ── CICLO ──────────────────────────────────────────────
+function goStep(n){
+  ['step1','step2','step3'].forEach((id,i)=>{
+    document.getElementById(id).style.display=i+1===n?'block':'none';
+  });
+  ['cn1','cn2','cn3'].forEach((id,i)=>{
+    const el=document.getElementById(id);
+    el.classList.toggle('active',i+1===n);
+  });
+  ['ca1','ca2'].forEach((id,i)=>{
+    document.getElementById(id).classList.toggle('lit',i<n-1);
+  });
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+// ── STATUS ─────────────────────────────────────────────
+async function checkHealth(){
+  const dot=document.getElementById('status-dot'),txt=document.getElementById('status-text');
+  try{
+    const r=await fetch(`${API}/api/health`,{signal:AbortSignal.timeout(3000)});
+    if(r.ok){const d=await r.json();dot.className='online';txt.textContent=`ONLINE v${d.version} · ${d.templates_stored} plantilla(s)`;log(`Servidor OK v${d.version}`,'ok');}
+    else throw new Error('HTTP '+r.status);
+  }catch(e){dot.className='offline';txt.textContent='SERVIDOR OFFLINE';log('Sin conexión: '+e.message,'err');}
+}
+
+// ── PASO 1: ANALIZAR ENTREVISTA ────────────────────────
+async function analizarEntrevista(){
+  const texto=document.getElementById('entrevista-text').value.trim();
+  if(!texto){log('Pega el texto de la entrevista primero','err');return;}
+  setBtn('btn-analizar',true);
+  log('Analizando texto...','info');
+  try{
+    const r=await fetch(`${API}/api/convert/parse-entrevista`,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({texto_entrevista:texto,reporte_template:'REPORTE_DIARIO.xlsx',output_filename:'parsed'})
+    });
+    const d=await r.json();
+    if(!r.ok)throw new Error(d.detail||'Error del servidor');
+    parsedFields=d.campos_detectados||{};
+
+    // Pre-llenar formulario con lo que se detectó
+    const p=parsedFields;
+    if(p['VICTIMA ']||p['VICTIMA'])
+      document.getElementById('f-victima').value=p['VICTIMA ']||p['VICTIMA'];
+    if(p['FOLIO_NUC'])
+      document.getElementById('f-folio').value=p['FOLIO_NUC'];
+    if(p['DELITO PRINCIPAL'])
+      document.getElementById('f-delito').value=p['DELITO PRINCIPAL'];
+    if(p['IMPUTADO ']||p['IMPUTADO'])
+      document.getElementById('f-imputado').value=p['IMPUTADO ']||p['IMPUTADO'];
+    if(p['FISCAL INICIAL']&&p['FISCAL INICIAL'].length<80)
+      document.getElementById('f-fiscal').value=p['FISCAL INICIAL'];
+    if(p['MUNICIPIO'])
+      document.getElementById('f-municipio').value=p['MUNICIPIO'];
+    if(p['FECHA DE INICIOS'])
+      document.getElementById('f-fecha').value=p['FECHA DE INICIOS'];
+
+    // Mostrar resumen visual de campos detectados
+    const grid=document.getElementById('fields-grid');grid.innerHTML='';
+    const mostrar=['DELITO PRINCIPAL','IMPUTADO ','FECHA DE INICIOS','MUNICIPIO',
+                   'CALIFICATIVO DEL DELITO','TESTIGOS','NARRATIVA DE LOS HECHOS'];
+    let detectados=0;
+    mostrar.forEach(k=>{
+      const v=p[k]||p[k.trim()];if(!v)return;
+      detectados++;
+      const div=document.createElement('div');div.className='field-item';
+      const short=String(v).length>65?String(v).substring(0,65)+'…':v;
+      div.innerHTML=`<div class="field-key">${k.trim()}</div><div class="field-val" title="${v}">${short}</div>`;
+      grid.appendChild(div);
+    });
+
+    const pendientes=d.campos_pendientes||[];
+    const badge=document.getElementById('badge-det');
+    if(detectados>0){
+      badge.textContent=`${detectados} detectados automáticamente`;
+      badge.className='badge badge-ok';
+      log(`✓ ${detectados} campos detectados. Revisa y completa el formulario.`,'ok');
+    } else {
+      badge.textContent='Sin detección — completa el formulario manualmente';
+      badge.className='badge badge-warn';
+      log('El texto no siguió un formato reconocible. Completa los campos manualmente.','info');
+    }
+
+    document.getElementById('analisis-card').scrollIntoView({behavior:'smooth'});
+  }catch(e){log('Error al analizar: '+e.message,'err');}
+  finally{setBtn('btn-analizar',false,'🔍 Analizar texto');}
+}
+
+// ── PASO 1: GENERAR REPORTE ────────────────────────────
+async function generarReporte(){
+  // Validar solo los dos campos verdaderamente obligatorios
+  const victima=document.getElementById('f-victima').value.trim();
+  const folio=document.getElementById('f-folio').value.trim();
+  const warn=document.getElementById('warn-campos');
+
+  if(!victima||!folio){
+    warn.style.display='block';
+    if(!victima)document.getElementById('f-victima').style.borderColor='var(--warn)';
+    if(!folio)  document.getElementById('f-folio').style.borderColor='var(--warn)';
+    log('⚠ Completa: Víctima y Folio NUC (mínimo requerido)','err');
+    return;
+  }
+  warn.style.display='none';
+  document.getElementById('f-victima').style.borderColor='';
+  document.getElementById('f-folio').style.borderColor='';
+
+  const texto=document.getElementById('entrevista-text').value.trim();
+  const outname=document.getElementById('f-out').value.trim()||'REPORTE_DIARIO_ACTUALIZADO';
+
+  // Enriquecer parsedFields con todo lo que el fiscal llenó manualmente
+  const delito   = document.getElementById('f-delito').value.trim().toUpperCase();
+  const imputado = document.getElementById('f-imputado').value.trim().toUpperCase();
+  const fiscal   = document.getElementById('f-fiscal').value.trim();
+  const detenido = document.getElementById('f-detenido').value;
+  const municipio= document.getElementById('f-municipio').value.trim();
+  const fecha    = document.getElementById('f-fecha').value.trim();
+
+  // Construir texto enriquecido si el parser no detectó campos clave
+  // Inyectar etiquetas al inicio para que el parser los encuentre con seguridad
+  let textoFinal=texto;
+  if(delito && !parsedFields['DELITO PRINCIPAL']){
+    textoFinal=`DELITO: ${delito}\n`+textoFinal;
+  }
+  if(imputado && !parsedFields['IMPUTADO ']){
+    textoFinal=`IMPUTADO: ${imputado}\n`+textoFinal;
+  }
+  if(municipio && !parsedFields['MUNICIPIO']){
+    textoFinal=`MUNICIPIO: ${municipio}\n`+textoFinal;
+  }
+  if(fecha && !parsedFields['FECHA DE INICIOS']){
+    textoFinal=`FECHA: ${fecha}\n`+textoFinal;
+  }
+
+  setBtn('btn-gen-rep',true);
+  log(`Generando ${outname}.xlsx...`,'info');
+  try{
+    const r=await fetch(`${API}/api/convert/entrevista-to-excel`,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        texto_entrevista:textoFinal,
+        nombre_victima:victima,
+        folio_nuc:folio,
+        fiscal:fiscal||null,
+        detenido:detenido,
+        reporte_template:document.getElementById('f-tpl').value.trim(),
+        output_filename:outname
+      })
+    });
+    if(!r.ok){const e=await r.json();throw new Error(e.detail||'Error del servidor');}
+    download(await r.blob(),`${outname}.xlsx`);
+    document.getElementById('dl-rep-name').textContent=outname+'.xlsx';
+    document.getElementById('dl-reporte').style.display='flex';
+    document.getElementById('cn1').classList.add('done');
+    document.getElementById('n-rep').value=document.getElementById('f-tpl').value.trim();
+    document.getElementById('sum-rep').textContent=outname+'.xlsx';
+    log(`✅ ${outname}.xlsx generado y descargado`,'ok');
+  }catch(e){log('Error al generar: '+e.message,'err');}
+  finally{setBtn('btn-gen-rep',false,'⚡ GENERAR Y DESCARGAR Reporte Diario (.xlsx)');}
+}
+
+// ── PASO 2: PREVIEW ────────────────────────────────────
+async function previewInicios(){
+  setBtn('btn-preview',true);
+  try{
+    const r=await fetch(`${API}/api/convert/preview-inicios`,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({reporte_template:document.getElementById('n-rep').value.trim(),
+        novedades_template:document.getElementById('n-nov').value.trim(),
+        fecha:document.getElementById('n-fecha').value.trim()||null,output_filename:'preview'})
+    });
+    const d=await r.json();if(!r.ok)throw new Error(d.detail);
+    document.getElementById('prev-count').textContent=d.total+' registros';
+    const tbody=document.getElementById('prev-tbody');tbody.innerHTML='';
+    d.rows.forEach(row=>{
+      const tr=document.createElement('tr');
+      tr.innerHTML=`<td title="${row.folio}">${row.folio}</td>
+        <td title="${row.delito}">${row.delito.substring(0,26)}${row.delito.length>26?'…':''}</td>
+        <td title="${row.victima}">${row.victima.substring(0,20)}${row.victima.length>20?'…':''}</td>
+        <td title="${row.imputado}">${row.imputado.substring(0,20)}${row.imputado.length>20?'…':''}</td>
+        <td>${row.municipio}</td>
+        <td style="color:${row.detenido==='SI'?'var(--warn)':'var(--accent2)'}">${row.detenido}</td>`;
+      tbody.appendChild(tr);
+    });
+    document.getElementById('preview-wrap').style.display='block';
+    log(`Preview: ${d.total} registros`,'ok');
+  }catch(e){log('Error preview: '+e.message,'err');}
+  finally{setBtn('btn-preview',false,'👁 Ver datos del Reporte');}
+}
+
+// ── PASO 2: GENERAR NOVEDADES ──────────────────────────
+async function generarNovedades(){
+  const outname=document.getElementById('n-out').value.trim()||'NOVEDADES_GENERADAS';
+  setBtn('btn-gen-nov',true);
+  log(`Generando ${outname}.xlsx...`,'info');
+  try{
+    const r=await fetch(`${API}/api/convert/inicios-to-novedades`,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        reporte_template:document.getElementById('n-rep').value.trim(),
+        novedades_template:document.getElementById('n-nov').value.trim(),
+        fecha:document.getElementById('n-fecha').value.trim()||null,
+        output_filename:outname
+      })
+    });
+    if(!r.ok){const e=await r.json();throw new Error(e.detail);}
+    download(await r.blob(),`${outname}.xlsx`);
+    document.getElementById('dl-nov-name').textContent=outname+'.xlsx';
+    document.getElementById('dl-novedades').style.display='flex';
+    document.getElementById('cn2').classList.add('done');
+    document.getElementById('cn3').classList.add('done');
+    document.getElementById('ca1').classList.add('lit');
+    document.getElementById('ca2').classList.add('lit');
+    document.getElementById('sum-nov').textContent=outname+'.xlsx';
+    log(`✅ ${outname}.xlsx descargado`,'ok');
+  }catch(e){log('Error: '+e.message,'err');}
+  finally{setBtn('btn-gen-nov',false,'⚡ GENERAR Y DESCARGAR Novedades (.xlsx)');}
+}
+
+// ── SUBIR ARCHIVO GENÉRICO ─────────────────────────────
+async function subirArchivo(input,id){
+  const file=input.files[0];if(!file)return;
+  const st=document.getElementById('st-'+id);st.textContent='▸ Subiendo...';
+  const form=new FormData();form.append('file',file);
+  try{
+    const r=await fetch(`${API}/api/template/upload`,{method:'POST',body:form});
+    const d=await r.json();if(!r.ok)throw new Error(d.detail);
+    st.textContent='✓ '+file.name+' en /plantillas';
+    if(id==='rep2')document.getElementById('n-rep').value=file.name;
+    log('✓ '+file.name+' subida','ok');
+  }catch(e){st.textContent='✗ Error: '+e.message;log('Error: '+e.message,'err');}
+}
+
+// ── PLANTILLAS ─────────────────────────────────────────
+async function subirPlantilla(input){
+  const file=input.files[0];if(!file)return;
+  const st=document.getElementById('st-tpl');st.textContent='▸ Subiendo '+file.name+'...';
+  const form=new FormData();form.append('file',file);
+  try{
+    const r=await fetch(`${API}/api/template/upload`,{method:'POST',body:form});
+    const d=await r.json();if(!r.ok)throw new Error(d.detail);
+    st.textContent='✓ '+file.name+' guardada';log('✓ Plantilla: '+file.name,'ok');cargarPlantillas();
+  }catch(e){st.textContent='✗ '+e.message;log('Error: '+e.message,'err');}
+}
+['drop-tpl'].forEach(id=>{
+  const el=document.getElementById(id);
+  el.addEventListener('dragover',e=>{e.preventDefault();el.classList.add('drag');});
+  el.addEventListener('dragleave',()=>el.classList.remove('drag'));
+  el.addEventListener('drop',e=>{e.preventDefault();el.classList.remove('drag');
+    const f=e.dataTransfer.files[0];if(f){subirPlantilla({files:[f]});}});
+});
+async function cargarPlantillas(){
+  try{
+    const r=await fetch(`${API}/api/template/list`);const d=await r.json();
+    const grid=document.getElementById('tpl-grid');
+    if(!d.templates.length){grid.innerHTML='<div style="color:var(--muted);font-size:.76rem;font-family:\'Share Tech Mono\',monospace">Sin plantillas — sube una arriba</div>';return;}
+    grid.innerHTML=d.templates.map(t=>`<div class="tpl-card" onclick="seleccionarPlantilla('${t.name}',this)">
+      <div class="tpl-badge badge-${t.type.toLowerCase()}">${t.type}</div>
+      <div class="tpl-card-name">${t.name}</div>
+      <div class="tpl-card-meta">${t.size_kb} KB</div></div>`).join('');
+  }catch(e){log('Error lista: '+e.message,'err');}
+}
+async function seleccionarPlantilla(name,el){
+  document.querySelectorAll('.tpl-card').forEach(c=>c.classList.remove('selected'));
+  el.classList.add('selected');selectedTpl=name;
+  try{
+    const r=await fetch(`${API}/api/template/analyze/${encodeURIComponent(name)}`);
+    const d=await r.json();tplAnalysis=d.analysis;
+    const box=document.getElementById('analisis-tpl-box');
+    let html=`<b style="color:var(--accent)">${d.analysis.type.toUpperCase()}</b> — ${d.analysis.info}<br><br>`;
+    if(d.analysis.fields?.length)html+=`Campos: `+d.analysis.fields.map(f=>`<span style="background:rgba(167,139,250,.15);color:var(--purple);padding:1px 7px;border-radius:3px;margin:2px;display:inline-block;font-size:.68rem">${f}</span>`).join('');
+    if(d.analysis.columns?.length)d.analysis.columns.forEach(col=>{
+      html+=`<br>${col.sheet}: `+col.headers.map(h=>`<span style="background:rgba(0,255,157,.1);color:var(--accent2);padding:1px 7px;border-radius:3px;margin:2px;display:inline-block;font-size:.68rem">${h}</span>`).join('');});
+    box.innerHTML=html;
+    document.getElementById('analisis-tpl-card').style.display='block';
+    log('Analizado: '+name,'ok');
+  }catch(e){log('Error análisis: '+e.message,'err');}
+}
+function mostrarRelleno(){
+  if(!tplAnalysis)return;
+  ['fill-word-card','fill-excel-card'].forEach(id=>document.getElementById(id).style.display='none');
+  if(tplAnalysis.type==='word'){
+    const c=document.getElementById('fw-fields');c.innerHTML='';
+    (tplAnalysis.fields||['{{campo}}']).forEach(f=>agregarCampoValor('fw-fields',f,''));
+    document.getElementById('fw-tabla-sec').style.display=
+      (tplAnalysis.tables||[]).some(t=>t.headers?.length)?'block':'none';
+    document.getElementById('fill-word-card').style.display='block';
+    document.getElementById('fill-word-card').scrollIntoView({behavior:'smooth'});
+  }else if(tplAnalysis.type==='excel'){
+    const col=tplAnalysis.columns[0]||{};
+    document.getElementById('fe-cols-info').innerHTML=col.headers?
+      `<div style="font-size:.72rem;color:var(--muted);font-family:'Share Tech Mono',monospace;margin-bottom:8px">Columnas: `+
+      col.headers.map(h=>`<span style="background:rgba(0,255,157,.1);color:var(--accent2);padding:1px 6px;border-radius:3px;margin:1px;font-size:.66rem">${h}</span>`).join('')+'</div>':'';
+    if(col.headers){const s=[{}];col.headers.forEach(h=>{s[0][h]='';});
+      document.getElementById('fe-data').value=JSON.stringify(s,null,2);
+      document.getElementById('fe-hint').textContent='▸ Encabezados: '+col.headers.join(', ');}
+    document.getElementById('fill-excel-card').style.display='block';
+    document.getElementById('fill-excel-card').scrollIntoView({behavior:'smooth'});
+  }
+}
+function agregarCampo(cid){agregarCampoValor(cid,'{{campo}}','');}
+function agregarCampoValor(cid,key,val){
+  const c=document.getElementById(cid);
+  const row=document.createElement('div');row.style.cssText='display:flex;gap:8px;margin-bottom:8px;align-items:center;';
+  row.innerHTML=`<input type="text" value="${key}" placeholder="{{campo}}" style="flex:0 0 175px;margin-bottom:0;color:#a78bfa;font-family:'Share Tech Mono',monospace;font-size:.78rem;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:7px 10px;color:#a78bfa;outline:none;">
+    <span style="color:var(--muted);font-family:'Share Tech Mono',monospace">→</span>
+    <input type="text" value="${val}" placeholder="valor" style="flex:1;margin-bottom:0;font-family:'Share Tech Mono',monospace;font-size:.78rem;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);padding:7px 10px;color:var(--text);outline:none;">
+    <button onclick="this.parentElement.remove()" style="background:none;border:none;color:var(--warn);cursor:pointer;font-size:1rem;padding:0 4px;">✕</button>`;
+  c.appendChild(row);
+}
+async function rellenarWord(){
+  if(!selectedTpl)return;
+  const fields={};
+  document.querySelectorAll('#fw-fields > div').forEach(row=>{
+    const ins=row.querySelectorAll('input');if(ins[0].value)fields[ins[0].value]=ins[1].value;});
+  let table_data=null;
+  const td=document.getElementById('fw-tabla');
+  if(td&&td.value.trim()!=='[]'){try{table_data=JSON.parse(td.value);}catch(e){log('JSON inválido','err');return;}}
+  const out=document.getElementById('fw-out').value.trim()||'rellenado';
+  setBtn('btn-fw',true);log('Rellenando Word...','info');
+  try{
+    const r=await fetch(`${API}/api/template/fill-word`,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({template_name:selectedTpl,output_filename:out,fields,table_data})});
+    if(!r.ok){const e=await r.json();throw new Error(e.detail);}
+    download(await r.blob(),out+'.docx');log('✓ '+out+'.docx descargado','ok');
+  }catch(e){log('Error: '+e.message,'err');}
+  finally{setBtn('btn-fw',false,'⚡ Generar Word rellenado');}
+}
+async function rellenarExcel(){
+  if(!selectedTpl)return;
+  let data;try{data=JSON.parse(document.getElementById('fe-data').value);}catch(e){log('JSON inválido','err');return;}
+  const out=document.getElementById('fe-out').value.trim()||'rellenado';
+  setBtn('btn-fe',true);log('Rellenando Excel...','info');
+  try{
+    const r=await fetch(`${API}/api/template/fill-excel`,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({template_name:selectedTpl,output_filename:out,data})});
+    if(!r.ok){const e=await r.json();throw new Error(e.detail);}
+    download(await r.blob(),out+'.xlsx');log('✓ '+out+'.xlsx descargado','ok');
+  }catch(e){log('Error: '+e.message,'err');}
+  finally{setBtn('btn-fe',false,'⚡ Agregar datos al Excel');}
+}
+
+// ── EXCEL / WORD DESDE CERO ────────────────────────────
+async function generateExcel(){
+  let data;try{data=JSON.parse(document.getElementById('xl-data').value);}catch(e){log('JSON inválido','err');return;}
+  const name=document.getElementById('xl-name').value.trim()||'reporte';
+  setBtn('btn-xl',true);
+  try{
+    const r=await fetch(`${API}/api/generate-excel`,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({filename:name,sheet_name:document.getElementById('xl-sheet').value.trim()||'Datos',data})});
+    if(!r.ok){const e=await r.json();throw new Error(e.detail);}
+    download(await r.blob(),name+'.xlsx');log('✓ '+name+'.xlsx','ok');
+  }catch(e){log('Error: '+e.message,'err');}
+  finally{setBtn('btn-xl',false,'⚡ Generar y Descargar .xlsx');}
+}
+async function generateWord(){
+  const name=document.getElementById('wd-name').value.trim()||'documento';
+  const title=document.getElementById('wd-title').value.trim();
+  const paragraphs=document.getElementById('wd-paras').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  if(!title){log('Falta el título','err');return;}
+  setBtn('btn-wd',true);
+  try{
+    const r=await fetch(`${API}/api/generate-word`,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({filename:name,title,paragraphs})});
+    if(!r.ok){const e=await r.json();throw new Error(e.detail);}
+    download(await r.blob(),name+'.docx');log('✓ '+name+'.docx','ok');
+  }catch(e){log('Error: '+e.message,'err');}
+  finally{setBtn('btn-wd',false,'⚡ Generar y Descargar .docx');}
+}
+
+// ── PDF ────────────────────────────────────────────────
+function seleccionarPDF(input){
+  selectedPDFFile=input.files[0];
+  if(selectedPDFFile){
+    document.getElementById('pdf-fname').textContent='▸ '+selectedPDFFile.name;
+    document.getElementById('btn-pdf').disabled=false;
+  }
+}
+const pdfDrop=document.getElementById('drop-pdf');
+pdfDrop.addEventListener('dragover',e=>{e.preventDefault();pdfDrop.classList.add('drag');});
+pdfDrop.addEventListener('dragleave',()=>pdfDrop.classList.remove('drag'));
+pdfDrop.addEventListener('drop',e=>{e.preventDefault();pdfDrop.classList.remove('drag');
+  const f=e.dataTransfer.files[0];if(f&&f.name.endsWith('.pdf')){selectedPDFFile=f;
+    document.getElementById('pdf-fname').textContent='▸ '+f.name;document.getElementById('btn-pdf').disabled=false;}});
+async function extractPDF(){
+  if(!selectedPDFFile)return;
+  setBtn('btn-pdf',true);log('Extrayendo texto...','info');
+  const form=new FormData();form.append('file',selectedPDFFile);
+  try{
+    const r=await fetch(`${API}/api/extract-pdf`,{method:'POST',body:form});
+    if(!r.ok){const e=await r.json();throw new Error(e.detail);}
+    const d=await r.json();
+    const ra=document.getElementById('pdf-resp');ra.style.display='block';
+    ra.textContent=d.raw_text.substring(0,3000)+(d.raw_text.length>3000?'\n...(truncado)':'');
+    log('✓ '+d.raw_text.length+' caracteres extraídos','ok');
+  }catch(e){log('Error: '+e.message,'err');}
+  finally{setBtn('btn-pdf',false,'🔍 Extraer Texto');}
+}
+
+// ── AUDIENCIAS: PDF → WORD ────────────────────────────
+let selectedPDFAud = null;
+
+function audGoStep(n){
+  document.getElementById('aud-step1').style.display = n===1?'block':'none';
+  document.getElementById('aud-step2').style.display = n===2?'block':'none';
+  ['an1','an2'].forEach((id,i)=>{
+    document.getElementById(id).classList.toggle('active', i+1===n);
+  });
+}
+
+// Drag & drop PDF
+const pdfAudDrop = document.getElementById('drop-pdf-aud');
+pdfAudDrop.addEventListener('dragover', e=>{e.preventDefault();pdfAudDrop.classList.add('drag');});
+pdfAudDrop.addEventListener('dragleave', ()=>pdfAudDrop.classList.remove('drag'));
+pdfAudDrop.addEventListener('drop', e=>{
+  e.preventDefault(); pdfAudDrop.classList.remove('drag');
+  const f = e.dataTransfer.files[0];
+  if(f && f.name.toLowerCase().endsWith('.pdf')) activarPDFAud(f);
+});
+
+function selPDFAudiencia(input){
+  const f = input.files[0]; if(f) activarPDFAud(f);
+}
+function activarPDFAud(f){
+  selectedPDFAud = f;
+  document.getElementById('pdf-aud-fname').textContent = '▸ '+f.name;
+  document.getElementById('btn-pdf-analizar').disabled = false;
+  document.getElementById('btn-pdf-directo').disabled = false;
+  log('PDF seleccionado: '+f.name, 'info');
+}
+
+// Analizar PDF → mostrar campos extraídos
+async function analizarPDFAudiencia(){
+  if(!selectedPDFAud){log('Selecciona un PDF primero','err');return;}
+  setBtn('btn-pdf-analizar', true);
+  log('Extrayendo datos del PDF...','info');
+  const form = new FormData(); form.append('file', selectedPDFAud);
+  try{
+    const r = await fetch(`${API}/api/audiencia/parse-pdf`, {method:'POST', body:form});
+    const d = await r.json(); if(!r.ok) throw new Error(d.detail);
+    const campos = d.campos_detectados;
+
+    // Mostrar grid
+    const grid = document.getElementById('pdf-aud-fields'); grid.innerHTML='';
+    Object.entries(campos).forEach(([k,v])=>{
+      if(!v) return;
+      const div=document.createElement('div'); div.className='field-item';
+      div.innerHTML=`<div class="field-key">${k}</div>
+        <div class="field-val" title="${v}">${v.length>65?v.substring(0,65)+'…':v}</div>`;
+      grid.appendChild(div);
+    });
+    document.getElementById('pdf-aud-badge').textContent=
+      `${d.total_detectados} detectados · ${d.campos_pendientes.length} pendientes`;
+    document.getElementById('pdf-aud-badge').className =
+      d.campos_pendientes.length>0 ? 'badge badge-warn' : 'badge badge-ok';
+
+    // Pre-llenar formulario
+    const fv = (id,val) => { if(val) document.getElementById(id).value=val; };
+    fv('r-nuc',   campos['NÚM DE CARPETA']);
+    fv('r-causa', campos['CARPETA ADMINISTRATIVA']);
+    fv('r-fecha', campos['FECHA']);
+    fv('r-hora',  campos['HORA']);
+    fv('r-victima',  campos['VÍCTIMA U OFENDIDO']);
+    fv('r-asesor',   campos['ASESOR JURÍDICO']);
+    fv('r-imputado', campos['IMPUTADO']);
+    fv('r-defensor', campos['DEFENSOR']);
+    fv('r-delito',   campos['DELITO']);
+    fv('r-fiscal',   campos['FISCAL QUE INTERVIENE']);
+    fv('r-juez',     campos['JUEZ DE CONTROL']);
+    fv('r-obs',      campos['OBSERVACIONES']);
+    const tipoSel = document.getElementById('r-tipo');
+    if(campos['TIPO DE AUDIENCIA']){
+      for(let opt of tipoSel.options){
+        if(opt.value.toLowerCase()===campos['TIPO DE AUDIENCIA'].toLowerCase()){
+          tipoSel.value=opt.value; break;
+        }
+      }
+      if(!tipoSel.value) tipoSel.options[0].text = campos['TIPO DE AUDIENCIA'];
+    }
+
+    document.getElementById('pdf-aud-result').style.display='block';
+    document.getElementById('pdf-aud-result').scrollIntoView({behavior:'smooth'});
+    log(`✓ ${d.total_detectados} campos extraídos. Pendientes: ${d.campos_pendientes.join(', ')||'ninguno'}`, 'ok');
+
+  }catch(e){log('Error: '+e.message,'err');}
+  finally{setBtn('btn-pdf-analizar', false, '🔍 Extraer datos del PDF');}
+}
+
+// PDF directo → Word (sin revisión)
+async function pdfToReporteDirecto(){
+  if(!selectedPDFAud){log('Selecciona un PDF primero','err');return;}
+  setBtn('btn-pdf-directo', true);
+  log('Generando reporte Word desde PDF...','info');
+  const form = new FormData();
+  form.append('file', selectedPDFAud);
+  form.append('output_filename', document.getElementById('pdf-out').value.trim()||'REPORTE_AUDIENCIA');
+  form.append('municipio', document.getElementById('pdf-municipio').value);
+  try{
+    const r = await fetch(`${API}/api/audiencia/pdf-to-reporte`, {method:'POST', body:form});
+    if(!r.ok){const e=await r.json();throw new Error(e.detail);}
+    const outname = document.getElementById('pdf-out').value.trim()||'REPORTE_AUDIENCIA';
+    download(await r.blob(), outname+'.docx');
+    log(`✅ ${outname}.docx descargado`,'ok');
+  }catch(e){log('Error: '+e.message,'err');}
+  finally{setBtn('btn-pdf-directo', false, '⚡ PDF → Word directo (todo en uno)');}
+}
+
+// Generar Word con campos revisados
+async function generarReporteWord(){
+  const fv = id => document.getElementById(id).value.trim();
+  const out = fv('r-out')||'REPORTE_AUDIENCIA';
+  setBtn('btn-gen-reporte-aud', true);
+  log(`Generando ${out}.docx...`,'info');
+  try{
+    const r = await fetch(`${API}/api/audiencia/generar-reporte`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        output_filename: out,
+        municipio:    document.getElementById('pdf-municipio').value,
+        fecha:        fv('r-fecha'), hora:       fv('r-hora'),
+        nuc:          fv('r-nuc'),   causa:      fv('r-causa'),
+        tipo_audiencia: fv('r-tipo')||document.getElementById('r-tipo').options[document.getElementById('r-tipo').selectedIndex].text,
+        victima:      fv('r-victima'),  asesor:   fv('r-asesor'),
+        imputado:     fv('r-imputado'), defensor: fv('r-defensor'),
+        delito:       fv('r-delito'),   fiscal:   fv('r-fiscal'),
+        juez:         fv('r-juez'),     observaciones: fv('r-obs'),
+      })
+    });
+    if(!r.ok){const e=await r.json();throw new Error(e.detail);}
+    download(await r.blob(), out+'.docx');
+    document.getElementById('dl-aud-word-name').textContent = out+'.docx';
+    document.getElementById('dl-reporte-aud').style.display='flex';
+    log(`✅ ${out}.docx descargado`,'ok');
+  }catch(e){log('Error: '+e.message,'err');}
+  finally{setBtn('btn-gen-reporte-aud',false,'⚡ GENERAR Y DESCARGAR Reporte de Audiencias (.docx)');}
+}
+
+// Opción B: texto manual
+async function analizarTextoManual(){
+  const texto = document.getElementById('aud-txt-manual').value.trim();
+  if(!texto){log('Pega texto primero','err');return;}
+  setBtn('btn-aud-txt-analizar', true);
+  log('Analizando texto...','info');
+  try{
+    const r = await fetch(`${API}/api/convert/parse-audiencia`,{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({texto_reporte:texto})
+    });
+    const d=await r.json(); if(!r.ok) throw new Error(d.detail);
+    const c=d.campos_detectados;
+    const fv=(id,v)=>{if(v)document.getElementById(id).value=v;};
+    fv('m-fecha', c['FECHA']); fv('m-hora', c['HORA']);
+    fv('m-nuc', c['NÚM DE CARPETA']||c['CARPETA DE INV.']);
+    fv('m-causa', c['CARPETA ADMINISTRATIVA']||c['CAUSA PENAL']);
+    fv('m-victima', c['VÍCTIMA U OFENDIDO']||c['VICTIMAS (S)']);
+    fv('m-asesor', c['ASESOR JURÍDICO']);
+    fv('m-imputado', c['IMPUTADO']||c['IMPUTADOS (S)']);
+    fv('m-defensor', c['DEFENSOR']);
+    fv('m-delito', c['DELITO']); fv('m-fiscal', c['FISCAL QUE INTERVIENE']||c['FISCAL']);
+    fv('m-juez', c['JUEZ DE CONTROL']||c['JUEZ']);
+    fv('m-obs', c['OBSERVACIONES']||c['RESOLUCION']);
+    if(c['TIPO DE AUDIENCIA']){
+      const s=document.getElementById('m-tipo');
+      for(let o of s.options){if(o.value===c['TIPO DE AUDIENCIA']){s.value=o.value;break;}}
+    }
+    log(`✓ ${d.total_detectados} campos detectados`,'ok');
+  }catch(e){log('Error: '+e.message,'err');}
+  finally{setBtn('btn-aud-txt-analizar',false,'🔍 Analizar texto');}
+}
+
+async function generarReporteManual(){
+  const fv=id=>document.getElementById(id).value.trim();
+  const out=fv('m-out')||'REPORTE_AUDIENCIA';
+  setBtn('btn-gen-manual',true);
+  log(`Generando ${out}.docx...`,'info');
+  try{
+    const r=await fetch(`${API}/api/audiencia/generar-reporte`,{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        output_filename:out,
+        municipio: document.getElementById('m-municipio').value,
+        fecha:fv('m-fecha'), hora:fv('m-hora'),
+        nuc:fv('m-nuc'), causa:fv('m-causa'),
+        tipo_audiencia:fv('m-tipo'),
+        victima:fv('m-victima'), asesor:fv('m-asesor'),
+        imputado:fv('m-imputado'), defensor:fv('m-defensor'),
+        delito:fv('m-delito'), fiscal:fv('m-fiscal'),
+        juez:fv('m-juez'), observaciones:fv('m-obs'),
+      })
+    });
+    if(!r.ok){const e=await r.json();throw new Error(e.detail);}
+    download(await r.blob(), out+'.docx');
+    document.getElementById('dl-manual-name').textContent=out+'.docx';
+    document.getElementById('dl-manual-aud').style.display='flex';
+    log(`✅ ${out}.docx descargado`,'ok');
+  }catch(e){log('Error: '+e.message,'err');}
+  finally{setBtn('btn-gen-manual',false,'⚡ GENERAR Y DESCARGAR Reporte de Audiencias (.docx)');}
+}
+
+// ── REINICIAR CICLO ────────────────────────────────────
+function reiniciarCiclo(){
+  document.getElementById('entrevista-text').value='';
+  // analisis-card ahora es siempre visible, solo limpiar contenido
+  document.getElementById('fields-grid').innerHTML='';
+  document.getElementById('badge-det').textContent='sin analizar aún';
+  document.getElementById('badge-det').className='badge badge-ok';
+  document.getElementById('dl-reporte').style.display='none';
+  document.getElementById('dl-novedades').style.display='none';
+  document.getElementById('preview-wrap').style.display='none';
+  document.getElementById('warn-campos').style.display='none';
+  // Limpiar todos los campos del formulario
+  ['f-victima','f-folio','f-fiscal','f-delito','f-imputado','f-municipio','f-fecha'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el)el.value='';
+    if(el)el.style.borderColor='';
+  });
+  document.getElementById('f-detenido').value='NO';
+  document.getElementById('f-tpl').value='REPORTE_DIARIO.xlsx';
+  document.getElementById('f-out').value='REPORTE_DIARIO_ACTUALIZADO';
+  ['cn1','cn2','cn3'].forEach(id=>{const el=document.getElementById(id);el.classList.remove('done','active');});
+  document.getElementById('cn1').classList.add('active');
+  ['ca1','ca2'].forEach(id=>document.getElementById(id).classList.remove('lit'));
+  parsedFields={};goStep(1);log('Ciclo reiniciado — listo para nueva entrevista','muted');
+}
+
+// ── INIT ───────────────────────────────────────────────
+checkHealth();
+setInterval(checkHealth,30000);
+
+// ═══════════════════════════════════════════════════════
+//  OCR — Subir foto/PDF y extraer texto automáticamente
+// ═══════════════════════════════════════════════════════
+
+async function subirArchivoTexto(input, targetId) {
+  const file = input.files[0];
+  if (!file) return;
+  const statusEl = document.getElementById('st-' + targetId);
+  if (statusEl) statusEl.textContent = '⏳ Extrayendo texto...';
+  log(`Procesando ${file.name}...`, 'info');
+
+  const formData = new FormData();
+  formData.append('file', file);
+  try {
+    const r = await fetch(`${API}/api/extract-text-from-file`, {
+      method: 'POST',
+      body: formData
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail || 'Error del servidor');
+
+    // Poner el texto extraído en el textarea destino
+    document.getElementById(targetId).value = d.text;
+    if (statusEl) statusEl.textContent = `✓ ${file.name}`;
+    log(`✓ Texto extraído de ${file.name} (${d.text.length} caracteres)`, 'ok');
+
+    if (d.warning) log('⚠ ' + d.warning, 'warn');
+
+    // Disparar análisis automático según el textarea destino
+    if (targetId === 'entrevista-text') {
+      await analizarEntrevista();
+    } else if (targetId === 'aud-txt-manual') {
+      await analizarTextoManual();
+    }
+  } catch(e) {
+    if (statusEl) statusEl.textContent = '✗ Error';
+    log('Error al extraer texto: ' + e.message, 'err');
+  }
+}
+
+// Soporte para pegar imágenes con Ctrl+V directo en los textareas
+function setupPasteImagen(textareaId) {
+  const ta = document.getElementById(textareaId);
+  if (!ta) return;
+  ta.addEventListener('paste', async (e) => {
+    const items = e.clipboardData ? e.clipboardData.items : [];
+    for (let item of items) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault();
+        const blob = item.getAsFile();
+        const file = new File([blob], 'imagen_pegada.png', { type: blob.type });
+        const fakeInput = { files: [file] };
+        log('Imagen pegada detectada — extrayendo texto con OCR...', 'info');
+        await subirArchivoTexto(fakeInput, textareaId);
+        break;
+      }
+    }
+  });
+}
+
+// Activar paste-imagen en los dos textareas principales
+setupPasteImagen('entrevista-text');
+setupPasteImagen('aud-txt-manual');
+
+</script>
+</body>
+</html>

@@ -1,0 +1,53 @@
+╔═══════════════════════════════════════════════════════════════╗
+║            NEXUS Ω — INSTRUCCIONES DE USO                     ║
+║        Sistema de Documentación Ministerial FGET              ║
+╚═══════════════════════════════════════════════════════════════╝
+
+¿CÓMO ABRIR EL SISTEMA?
+────────────────────────
+  ▶ Haz doble clic en:  NEXUS_INICIAR.bat
+  
+  La primera vez tardará unos minutos (se instala solo).
+  A partir de la segunda vez, abre en segundos.
+
+  El sistema se abre automáticamente en tu navegador web.
+  No necesitas hacer nada más.
+
+
+¿QUÉ HACE CADA ARCHIVO?
+────────────────────────
+  NEXUS_INICIAR.bat    → Abre el sistema (este es el que usas siempre)
+  NEXUS_DETENER.bat    → Detiene el sistema cuando terminas
+
+  (Los demás archivos son del sistema, no los toques)
+
+
+¿EN QUÉ NAVEGADOR FUNCIONA?
+────────────────────────────
+  Funciona en cualquiera:
+    ✓ Google Chrome (recomendado)
+    ✓ Microsoft Edge
+    ✓ Firefox
+    ✓ Opera
+
+
+¿QUÉ PUEDO HACER EN EL SISTEMA?
+─────────────────────────────────
+  ✓ Generar Reportes Diarios automáticamente
+  ✓ Crear Reportes de Audiencias desde texto
+  ✓ Acumular todos los reportes en el Tablero General
+  ✓ Acumular todas las audiencias en el Tablero de Audiencias
+  ✓ Descargar cualquier documento como archivo Excel o Word
+
+
+SI ALGO NO FUNCIONA
+────────────────────
+  1. Cierra el navegador
+  2. Haz doble clic en NEXUS_DETENER.bat
+  3. Espera 5 segundos
+  4. Haz doble clic en NEXUS_INICIAR.bat de nuevo
+
+  Si el problema persiste, contacta al administrador del sistema.
+
+
+═══════════════════════════════════════════════════════════════
