@@ -3,10 +3,12 @@ nexus_tray.py — Lanzador de NEXUS Ω con ícono en la bandeja del sistema.
 Corre el servidor en segundo plano y muestra un ícono en la barra de tareas.
 El usuario puede abrir el panel o detener NEXUS desde ahí.
 """
+
 import sys, os, threading, time, webbrowser, subprocess, signal
 import urllib.request
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 
 # ── Leer comando Python configurado ──────────────────────────────
 def _python_cmd() -> str:
@@ -17,12 +19,14 @@ def _python_cmd() -> str:
                 return line.strip().split("=", 1)[1]
     return "python"
 
+
 PYTHON = _python_cmd()
-PORT   = 8000
-URL    = f"http://127.0.0.1:{PORT}"
+PORT = 8000
+URL = f"http://127.0.0.1:{PORT}"
 
 # ── Servidor ──────────────────────────────────────────────────────
 _servidor_proc = None
+
 
 def _iniciar_servidor():
     global _servidor_proc
@@ -35,6 +39,7 @@ def _iniciar_servidor():
         creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
     )
 
+
 def _esperar_servidor(timeout: int = 20) -> bool:
     """Espera hasta que el servidor responda o se agote el tiempo."""
     for _ in range(timeout * 2):
@@ -44,6 +49,7 @@ def _esperar_servidor(timeout: int = 20) -> bool:
         except Exception:
             time.sleep(0.5)
     return False
+
 
 def _detener_servidor():
     global _servidor_proc
@@ -64,9 +70,10 @@ def _crear_icono_imagen():
     """Crea el ícono PNG en memoria usando Pillow."""
     try:
         from PIL import Image, ImageDraw, ImageFont
+
         size = 64
-        img  = Image.new("RGBA", (size, size), (7, 11, 18, 255))
-        d    = ImageDraw.Draw(img)
+        img = Image.new("RGBA", (size, size), (7, 11, 18, 255))
+        d = ImageDraw.Draw(img)
         # Círculo de fondo
         d.ellipse([4, 4, 60, 60], fill=(0, 229, 255, 220))
         # Letra N
@@ -79,20 +86,28 @@ def _crear_icono_imagen():
     except Exception:
         # Fallback: ícono mínimo si Pillow falla
         from PIL import Image
+
         img = Image.new("RGB", (32, 32), color=(0, 80, 160))
         return img
 
 
 def _construir_menu(tray):
     import pystray
+
     return (
         pystray.MenuItem("🌐 Abrir NEXUS", lambda: webbrowser.open(URL), default=True),
         pystray.Menu.SEPARATOR,
-        pystray.MenuItem("📊 Tablero Inicios",     lambda: webbrowser.open(URL + "/?tab=tablero")),
-        pystray.MenuItem("🏛 Tablero Audiencias",   lambda: webbrowser.open(URL + "/?tab=tablero-aud")),
-        pystray.MenuItem("📋 Reporte Audiencias",   lambda: webbrowser.open(URL + "/?tab=audiencias")),
+        pystray.MenuItem(
+            "📊 Tablero Inicios", lambda: webbrowser.open(URL + "/?tab=tablero")
+        ),
+        pystray.MenuItem(
+            "🏛 Tablero Audiencias", lambda: webbrowser.open(URL + "/?tab=tablero-aud")
+        ),
+        pystray.MenuItem(
+            "📋 Reporte Audiencias", lambda: webbrowser.open(URL + "/?tab=audiencias")
+        ),
         pystray.Menu.SEPARATOR,
-        pystray.MenuItem("⛔ Detener NEXUS",        lambda: _salir(tray)),
+        pystray.MenuItem("⛔ Detener NEXUS", lambda: _salir(tray)),
     )
 
 
@@ -132,11 +147,15 @@ def main():
             ok = _esperar_servidor(timeout=20)
             if ok:
                 t.title = "NEXUS Ω — Activo ✓"
-                _mostrar_notificacion(t, "NEXUS Ω", "Sistema listo. Haz clic para abrir.")
+                _mostrar_notificacion(
+                    t, "NEXUS Ω", "Sistema listo. Haz clic para abrir."
+                )
                 webbrowser.open(URL)
             else:
                 t.title = "NEXUS Ω — Error al iniciar"
-                _mostrar_notificacion(t, "NEXUS Ω ⚠", "El servidor tardó demasiado en iniciar.")
+                _mostrar_notificacion(
+                    t, "NEXUS Ω ⚠", "El servidor tardó demasiado en iniciar."
+                )
 
         tray.run(_arrancar)
 

@@ -3,6 +3,7 @@ NEXUS Omega DocProcessor — Servidor Unificado v3.1
 Todo integrado: Generación + Plantillas + Conversión + Parser + OCR portable
 Un solo archivo. Sin dependencias externas de módulos.
 """
+
 import os, uuid, re, multiprocessing, sys, copy, io
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import FileResponse
@@ -21,6 +22,7 @@ try:
     import numpy as np
     import pytesseract
     from PIL import Image as _PILImage
+
     _OCR_DISPONIBLE = True
 except ImportError:
     _OCR_DISPONIBLE = False
@@ -28,9 +30,11 @@ except ImportError:
 app = FastAPI(
     title="Nexus DocProcessor v3.0",
     description="Motor unificado: generación, plantillas, conversión y parser de entrevistas.",
-    version="3.0.0"
+    version="3.0.0",
 )
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(
+    CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
+)
 
 from fastapi.responses import HTMLResponse, Response
 
@@ -42,10 +46,10 @@ if getattr(sys, "frozen", False):
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-TEMP_DIR  = os.path.join(BASE_DIR, "temp_docs")
-TPLS_DIR  = os.path.join(BASE_DIR, "plantillas")
-TESS_DIR  = os.path.join(BASE_DIR, "tesseract")   # Tesseract OCR portable
-TESS_EXE  = os.path.join(TESS_DIR, "tesseract.exe")
+TEMP_DIR = os.path.join(BASE_DIR, "temp_docs")
+TPLS_DIR = os.path.join(BASE_DIR, "plantillas")
+TESS_DIR = os.path.join(BASE_DIR, "tesseract")  # Tesseract OCR portable
+TESS_EXE = os.path.join(TESS_DIR, "tesseract.exe")
 for d in [TEMP_DIR, TPLS_DIR]:
     os.makedirs(d, exist_ok=True)
 
@@ -53,6 +57,7 @@ for d in [TEMP_DIR, TPLS_DIR]:
 if _OCR_DISPONIBLE and os.path.exists(TESS_EXE):
     pytesseract.pytesseract.tesseract_cmd = TESS_EXE
     os.environ["PATH"] += os.pathsep + TESS_DIR
+
 
 # ─────────────────────────────────────────────────────
 #  PWA — RUTAS ESTÁTICAS
@@ -65,27 +70,34 @@ def _read_file(filename: str, mode: str = "r"):
     with open(path, mode, encoding=enc) as f:
         return f.read()
 
+
 @app.get("/", response_class=HTMLResponse)
 async def serve_panel():
     html = _read_file("panel.html")
     if not html:
-        return HTMLResponse("<h1>panel.html no encontrado en la carpeta del servidor</h1>", 404)
+        return HTMLResponse(
+            "<h1>panel.html no encontrado en la carpeta del servidor</h1>", 404
+        )
     return HTMLResponse(html)
+
 
 @app.get("/panel.html", response_class=HTMLResponse)
 async def serve_panel_direct():
     html = _read_file("panel.html")
     return HTMLResponse(html or "<h1>No encontrado</h1>", 200 if html else 404)
 
+
 @app.get("/manifest.json")
 async def serve_manifest():
     content = _read_file("manifest.json")
     return Response(content or "{}", media_type="application/manifest+json")
 
+
 @app.get("/sw.js")
 async def serve_sw():
     content = _read_file("sw.js")
     return Response(content or "", media_type="application/javascript")
+
 
 @app.get("/icon-{size}.png")
 async def serve_icon(size: int):
@@ -103,70 +115,181 @@ async def serve_icon(size: int):
     </svg>"""
     return Response(svg, media_type="image/svg+xml")
 
+
 # ─────────────────────────────────────────────────────
 #  PARSER DE ENTREVISTAS MINISTERIALES v4 (FGET Tabasco)
 #  Maneja: narrativa libre, bullet points, formulario,
 #  dictado, relato de primera persona, tercera persona
 # ─────────────────────────────────────────────────────
 MESES = {
-    "enero":1,"febrero":2,"marzo":3,"abril":4,"mayo":5,"junio":6,
-    "julio":7,"agosto":8,"septiembre":9,"octubre":10,"noviembre":11,"diciembre":12
+    "enero": 1,
+    "febrero": 2,
+    "marzo": 3,
+    "abril": 4,
+    "mayo": 5,
+    "junio": 6,
+    "julio": 7,
+    "agosto": 8,
+    "septiembre": 9,
+    "octubre": 10,
+    "noviembre": 11,
+    "diciembre": 12,
 }
 MESES_NUM = MESES  # alias para parser de audiencias
 
 # Palabras que indican quién hizo el daño (agresor/imputado)
 _VERBOS_AGRESION = [
-    "me golpeó","me pegó","me agredió","me amenazó","me jaloneó","me aventó","me empujó",
-    "me cortó","me hirió","me disparó","me robo","me robó","me extorsionó","me violó",
-    "me tocó","me acosó","me insulto","me insultó","me zarandeó","me estranguló",
-    "me quemó","me pateó","me mordió","me arañó","me rasguñó","me lastimó",
-    "golpeó","agredió","amenazó","atacó","disparó","hirió","robó","asaltó",
-    "acometió","lesionó","violó","abusó","lastimó","intimidó","acosó",
+    "me golpeó",
+    "me pegó",
+    "me agredió",
+    "me amenazó",
+    "me jaloneó",
+    "me aventó",
+    "me empujó",
+    "me cortó",
+    "me hirió",
+    "me disparó",
+    "me robo",
+    "me robó",
+    "me extorsionó",
+    "me violó",
+    "me tocó",
+    "me acosó",
+    "me insulto",
+    "me insultó",
+    "me zarandeó",
+    "me estranguló",
+    "me quemó",
+    "me pateó",
+    "me mordió",
+    "me arañó",
+    "me rasguñó",
+    "me lastimó",
+    "golpeó",
+    "agredió",
+    "amenazó",
+    "atacó",
+    "disparó",
+    "hirió",
+    "robó",
+    "asaltó",
+    "acometió",
+    "lesionó",
+    "violó",
+    "abusó",
+    "lastimó",
+    "intimidó",
+    "acosó",
 ]
 _DELITO_KEYWORDS = {
-    "golpe":"LESIONES","golpeó":"LESIONES","pegó":"LESIONES","pegaron":"LESIONES",
-    "lesion":"LESIONES","lesionó":"LESIONES","lesiones":"LESIONES","hirió":"LESIONES",
-    "machetazo":"LESIONES CALIFICADAS","cuchillo":"LESIONES CALIFICADAS",
-    "navaja":"LESIONES CALIFICADAS","arma":"LESIONES CALIFICADAS",
-    "disparo":"LESIONES CALIFICADAS","bala":"LESIONES CALIFICADAS",
-    "violencia familiar":"VIOLENCIA FAMILIAR","violenta":"VIOLENCIA FAMILIAR",
-    "violento":"VIOLENCIA FAMILIAR","patea":"VIOLENCIA FAMILIAR",
-    "homicidio":"HOMICIDIO","mató":"HOMICIDIO","asesinó":"HOMICIDIO","muerto":"HOMICIDIO",
-    "feminicidio":"FEMINICIDIO",
-    "robo":"ROBO","robó":"ROBO","asaltó":"ROBO","sustrajeron":"ROBO",
-    "fraude":"FRAUDE","engañó":"FRAUDE","estafó":"FRAUDE",
-    "extorsión":"EXTORSIÓN","extorsionó":"EXTORSIÓN","extorsion":"EXTORSIÓN",
-    "abuso sexual":"ABUSO SEXUAL","tocó":"ABUSO SEXUAL","acoso sexual":"ACOSO SEXUAL",
-    "violación":"VIOLACIÓN","violó":"VIOLACIÓN",
-    "pederastia":"PEDERASTIA","menor":"PEDERASTIA",
-    "amenaza":"AMENAZAS","amenazó":"AMENAZAS","te mato":"AMENAZAS","te voy a matar":"AMENAZAS",
-    "secuestro":"SECUESTRO","retuvo":"PRIVACIÓN ILEGAL DE LA LIBERTAD","privó":"PRIVACIÓN ILEGAL DE LA LIBERTAD",
-    "incumplimiento":"INCUMPLIMIENTO DE OBLIGACIONES ALIMENTARIAS","alimentos":"INCUMPLIMIENTO DE OBLIGACIONES ALIMENTARIAS",
-    "daño":"DAÑO EN PROPIEDAD AJENA","destruyó":"DAÑO EN PROPIEDAD AJENA",
-    "narcomenudeo":"NARCOMENUDEO","droga":"NARCOMENUDEO",
-    "portación":"PORTACIÓN DE ARMA DE FUEGO","arma de fuego":"PORTACIÓN DE ARMA DE FUEGO",
+    "golpe": "LESIONES",
+    "golpeó": "LESIONES",
+    "pegó": "LESIONES",
+    "pegaron": "LESIONES",
+    "lesion": "LESIONES",
+    "lesionó": "LESIONES",
+    "lesiones": "LESIONES",
+    "hirió": "LESIONES",
+    "machetazo": "LESIONES CALIFICADAS",
+    "cuchillo": "LESIONES CALIFICADAS",
+    "navaja": "LESIONES CALIFICADAS",
+    "arma": "LESIONES CALIFICADAS",
+    "disparo": "LESIONES CALIFICADAS",
+    "bala": "LESIONES CALIFICADAS",
+    "violencia familiar": "VIOLENCIA FAMILIAR",
+    "violenta": "VIOLENCIA FAMILIAR",
+    "violento": "VIOLENCIA FAMILIAR",
+    "patea": "VIOLENCIA FAMILIAR",
+    "homicidio": "HOMICIDIO",
+    "mató": "HOMICIDIO",
+    "asesinó": "HOMICIDIO",
+    "muerto": "HOMICIDIO",
+    "feminicidio": "FEMINICIDIO",
+    "robo": "ROBO",
+    "robó": "ROBO",
+    "asaltó": "ROBO",
+    "sustrajeron": "ROBO",
+    "fraude": "FRAUDE",
+    "engañó": "FRAUDE",
+    "estafó": "FRAUDE",
+    "extorsión": "EXTORSIÓN",
+    "extorsionó": "EXTORSIÓN",
+    "extorsion": "EXTORSIÓN",
+    "abuso sexual": "ABUSO SEXUAL",
+    "tocó": "ABUSO SEXUAL",
+    "acoso sexual": "ACOSO SEXUAL",
+    "violación": "VIOLACIÓN",
+    "violó": "VIOLACIÓN",
+    "pederastia": "PEDERASTIA",
+    "menor": "PEDERASTIA",
+    "amenaza": "AMENAZAS",
+    "amenazó": "AMENAZAS",
+    "te mato": "AMENAZAS",
+    "te voy a matar": "AMENAZAS",
+    "secuestro": "SECUESTRO",
+    "retuvo": "PRIVACIÓN ILEGAL DE LA LIBERTAD",
+    "privó": "PRIVACIÓN ILEGAL DE LA LIBERTAD",
+    "incumplimiento": "INCUMPLIMIENTO DE OBLIGACIONES ALIMENTARIAS",
+    "alimentos": "INCUMPLIMIENTO DE OBLIGACIONES ALIMENTARIAS",
+    "daño": "DAÑO EN PROPIEDAD AJENA",
+    "destruyó": "DAÑO EN PROPIEDAD AJENA",
+    "narcomenudeo": "NARCOMENUDEO",
+    "droga": "NARCOMENUDEO",
+    "portación": "PORTACIÓN DE ARMA DE FUEGO",
+    "arma de fuego": "PORTACIÓN DE ARMA DE FUEGO",
 }
+
 
 def _limpiar_nombre(s: str) -> str:
     """Limpia un nombre extraído: quita prefijos de título, puntuación extra."""
-    s = re.sub(r'\*+', '', s).strip()
-    s = re.sub(r'^(?:C\.|SR\.|SRA\.|LIC\.|ING\.|DR\.|SEÑOR\s+|SEÑORA\s+)', '', s, flags=re.I).strip()
-    s = re.sub(r'\s{2,}', ' ', s)
-    s = s.strip('.,;:')
+    s = re.sub(r"\*+", "", s).strip()
+    s = re.sub(
+        r"^(?:C\.|SR\.|SRA\.|LIC\.|ING\.|DR\.|SEÑOR\s+|SEÑORA\s+)", "", s, flags=re.I
+    ).strip()
+    s = re.sub(r"\s{2,}", " ", s)
+    s = s.strip(".,;:")
     return s
+
 
 def _detectar_sexo(contexto: str, nombre: str = "") -> str:
     """Detecta sexo a partir del contexto narrativo."""
     cl = contexto.lower()
-    masc = ["él ","su esposo","mi esposo","mi marido","el señor","el sujeto",
-            "el agresor","el imputado","el acusado","mi hijo","su hijo","mi papá","mi padre"]
-    feme = ["ella ","su esposa","mi esposa","la señora","la sujeta","mi hija",
-            "la agresora","la imputada","mi mamá","mi madre","mi pareja"]
+    masc = [
+        "él ",
+        "su esposo",
+        "mi esposo",
+        "mi marido",
+        "el señor",
+        "el sujeto",
+        "el agresor",
+        "el imputado",
+        "el acusado",
+        "mi hijo",
+        "su hijo",
+        "mi papá",
+        "mi padre",
+    ]
+    feme = [
+        "ella ",
+        "su esposa",
+        "mi esposa",
+        "la señora",
+        "la sujeta",
+        "mi hija",
+        "la agresora",
+        "la imputada",
+        "mi mamá",
+        "mi madre",
+        "mi pareja",
+    ]
     for w in feme:
-        if w in cl: return "Femenino"
+        if w in cl:
+            return "Femenino"
     for w in masc:
-        if w in cl: return "Masculino"
+        if w in cl:
+            return "Masculino"
     return "S/D"
+
 
 def parsear_entrevista(texto: str) -> Dict[str, str]:
     """
@@ -182,8 +305,8 @@ def parsear_entrevista(texto: str) -> Dict[str, str]:
     tl = t.lower()
 
     # ── PRE-PROCESO ──────────────────────────────────────────────
-    t_clean = re.sub(r'\*+', ' ', t)
-    t_clean = re.sub(r'[ \t]{2,}', ' ', t_clean)
+    t_clean = re.sub(r"\*+", " ", t)
+    t_clean = re.sub(r"[ \t]{2,}", " ", t_clean)
 
     # ── FOLIO / NUC ──────────────────────────────────────────────
     for pat in [
@@ -193,8 +316,8 @@ def parsear_entrevista(texto: str) -> Dict[str, str]:
     ]:
         m = re.search(pat, t_clean, re.I)
         if m:
-            val = m.group(1).strip().rstrip('.,')
-            if re.search(r'\d', val):
+            val = m.group(1).strip().rstrip(".,")
+            if re.search(r"\d", val):
                 result["FOLIO_NUC"] = val
                 break
 
@@ -208,8 +331,8 @@ def parsear_entrevista(texto: str) -> Dict[str, str]:
     ]:
         m = re.search(pat, t_clean, re.I)
         if m:
-            val = m.group(1).strip().rstrip('.,').upper()
-            if len(val) > 3 and not re.search(r'\b(QUE|EL|LA|UN|DEL)\b$', val):
+            val = m.group(1).strip().rstrip(".,").upper()
+            if len(val) > 3 and not re.search(r"\b(QUE|EL|LA|UN|DEL)\b$", val):
                 result["DELITO PRINCIPAL"] = val
                 result["DELITO FINAL"] = val
                 break
@@ -224,13 +347,30 @@ def parsear_entrevista(texto: str) -> Dict[str, str]:
 
     # ── IMPUTADO / AGRESOR ─────────────────────────────────────────
     # Lista de palabras que NO son nombres (evitar capturar el delito u otras cosas)
-    _NO_NOMBRE = ["violencia","familiar","lesion","homicidio","delito","fraude","amenaza",
-                  "fiscal","ministerio","agencia","juzgado","tribunal","carpeta","causa","penal"]
+    _NO_NOMBRE = [
+        "violencia",
+        "familiar",
+        "lesion",
+        "homicidio",
+        "delito",
+        "fraude",
+        "amenaza",
+        "fiscal",
+        "ministerio",
+        "agencia",
+        "juzgado",
+        "tribunal",
+        "carpeta",
+        "causa",
+        "penal",
+    ]
 
     def _es_nombre_valido(n: str) -> bool:
         nl = n.lower().strip()
-        if len(nl) < 5: return False
-        if any(x in nl for x in _NO_NOMBRE): return False
+        if len(nl) < 5:
+            return False
+        if any(x in nl for x in _NO_NOMBRE):
+            return False
         # Debe tener al menos dos palabras (nombre + apellido)
         partes = [p for p in nl.split() if len(p) > 1]
         return len(partes) >= 2
@@ -250,11 +390,11 @@ def parsear_entrevista(texto: str) -> Dict[str, str]:
         m = re.search(pat, t_clean, re.I | re.MULTILINE)
         if m:
             nombre = _limpiar_nombre(m.group(1))
-            victima_actual = result.get("VICTIMA ","").upper()
+            victima_actual = result.get("VICTIMA ", "").upper()
             # No capturar si es igual a la víctima o no es nombre válido
             if _es_nombre_valido(nombre) and nombre.upper() not in victima_actual:
                 result["IMPUTADO "] = nombre.upper()
-                result["IMPUTADO"]  = nombre.upper()
+                result["IMPUTADO"] = nombre.upper()
                 break
 
     # Fallback informal: "[NOMBRE] me [golpeó/pegó/...]"
@@ -262,13 +402,14 @@ def parsear_entrevista(texto: str) -> Dict[str, str]:
         m = re.search(
             r"([A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+){1,3})\s+"
             r"me\s+(?:golpeó|pegó|agredió|amenazó|atacó|hirió|cortó|disparó|lesionó|lastimó)",
-            t_clean, re.I
+            t_clean,
+            re.I,
         )
         if m:
             nombre = _limpiar_nombre(m.group(1))
             if _es_nombre_valido(nombre):
                 result["IMPUTADO "] = nombre.upper()
-                result["IMPUTADO"]  = nombre.upper()
+                result["IMPUTADO"] = nombre.upper()
 
     # Fallback relación: "mi esposo/pareja [nombre]" sin nombre a continuación de verbo
     if not result.get("IMPUTADO "):
@@ -276,23 +417,28 @@ def parsear_entrevista(texto: str) -> Dict[str, str]:
             r"(?:mi|su)\s+(esposo[a]?|pareja|concubino[a]?|ex|padre|madre|hijo[a]?|hermano[a]?|"
             r"vecino[a]?|jefe|compañero[a]?)\s+(?:de\s+nombre\s+)?([A-ZÁÉÍÓÚÑ][a-záéíóúñA-ZÁÉÍÓÚÑ\s]{5,50}?)"
             r"(?:\s+me\s+|\s+quien\s+|\s+el\s+cual\s+|,|\.|;|\n)",
-            t_clean, re.I
+            t_clean,
+            re.I,
         )
         if m:
             relacion = m.group(1).upper()
-            nombre   = _limpiar_nombre(m.group(2))
+            nombre = _limpiar_nombre(m.group(2))
             if _es_nombre_valido(nombre):
                 result["IMPUTADO "] = f"{nombre.upper()} ({relacion})"
-                result["IMPUTADO"]  = result["IMPUTADO "]
+                result["IMPUTADO"] = result["IMPUTADO "]
 
     # Sexo e edad del imputado
     if result.get("IMPUTADO "):
         result["SEXO IMPUTADO"] = _detectar_sexo(t_clean)
         edad_m = re.search(
-            r"(?:como de|aproximadamente|tiene)\s*(\d{1,2})\s*años",
-            t_clean, re.I)
+            r"(?:como de|aproximadamente|tiene)\s*(\d{1,2})\s*años", t_clean, re.I
+        )
         result["EDAD IMPUTADO"] = edad_m.group(1) if edad_m else "S/D (MAYOR)"
-        alias_m = re.search(r"ALIAS\s+[\"']?([A-ZÁÉÍÓÚÑA-Za-záéíóúñ\s]+?)[\"']?(?:,|\.|;|\n|quien)", t_clean, re.I)
+        alias_m = re.search(
+            r"ALIAS\s+[\"']?([A-ZÁÉÍÓÚÑA-Za-záéíóúñ\s]+?)[\"']?(?:,|\.|;|\n|quien)",
+            t_clean,
+            re.I,
+        )
         if alias_m:
             result["ALIAS"] = alias_m.group(1).strip()
 
@@ -306,9 +452,9 @@ def parsear_entrevista(texto: str) -> Dict[str, str]:
         m = re.search(pat, t_clean, re.I)
         if m:
             nombre = _limpiar_nombre(m.group(1))
-            if len(nombre) > 5 and nombre.upper() != result.get("IMPUTADO ",""):
+            if len(nombre) > 5 and nombre.upper() != result.get("IMPUTADO ", ""):
                 result["VICTIMA "] = nombre.upper()
-                result["VICTIMA"]  = nombre.upper()
+                result["VICTIMA"] = nombre.upper()
                 # Sexo e edad de la víctima
                 result["SEXO VICTIMA"] = _detectar_sexo(t_clean[:200])
                 edad_v = re.search(r"(\d{1,2})\s*años\s+de\s+edad", t_clean[:400], re.I)
@@ -317,26 +463,60 @@ def parsear_entrevista(texto: str) -> Dict[str, str]:
 
     if not result.get("VICTIMA "):
         result["VICTIMA "] = ""
-        result["VICTIMA"]  = ""
+        result["VICTIMA"] = ""
         result["SEXO VICTIMA"] = "S/D"
         result["EDAD VICTIMA"] = "S/D (MAYOR)"
 
     # ── FECHA ─────────────────────────────────────────────────────
     # Números escritos en texto (español legal)
     _NUMS_ES = {
-        "uno":1,"dos":2,"tres":3,"cuatro":4,"cinco":5,"seis":6,"siete":7,"ocho":8,
-        "nueve":9,"diez":10,"once":11,"doce":12,"trece":13,"catorce":14,"quince":15,
-        "dieciséis":16,"dieciseis":16,"diecisiete":17,"dieciocho":18,"diecinueve":19,
-        "veinte":20,"veintiuno":21,"veintidós":22,"veintidos":22,"veintitrés":23,
-        "veintitres":23,"veinticuatro":24,"veinticinco":25,"veintiséis":26,
-        "veintiseis":26,"veintisiete":27,"veintiocho":28,"veintinueve":29,
-        "treinta":30,"treinta y uno":31,
+        "uno": 1,
+        "dos": 2,
+        "tres": 3,
+        "cuatro": 4,
+        "cinco": 5,
+        "seis": 6,
+        "siete": 7,
+        "ocho": 8,
+        "nueve": 9,
+        "diez": 10,
+        "once": 11,
+        "doce": 12,
+        "trece": 13,
+        "catorce": 14,
+        "quince": 15,
+        "dieciséis": 16,
+        "dieciseis": 16,
+        "diecisiete": 17,
+        "dieciocho": 18,
+        "diecinueve": 19,
+        "veinte": 20,
+        "veintiuno": 21,
+        "veintidós": 22,
+        "veintidos": 22,
+        "veintitrés": 23,
+        "veintitres": 23,
+        "veinticuatro": 24,
+        "veinticinco": 25,
+        "veintiséis": 26,
+        "veintiseis": 26,
+        "veintisiete": 27,
+        "veintiocho": 28,
+        "veintinueve": 29,
+        "treinta": 30,
+        "treinta y uno": 31,
     }
     _ANIOS_ES = {
-        "dos mil veinticuatro":2024,"dos mil veinticinco":2025,"dos mil veintiséis":2026,
-        "dos mil veintiseis":2026,"dos mil veintisiete":2027,"dos mil veintiocho":2028,
-        "dos mil veintitrés":2023,"dos mil veintitres":2023,"dos mil veintidós":2022,
-        "dos mil veintidos":2022,
+        "dos mil veinticuatro": 2024,
+        "dos mil veinticinco": 2025,
+        "dos mil veintiséis": 2026,
+        "dos mil veintiseis": 2026,
+        "dos mil veintisiete": 2027,
+        "dos mil veintiocho": 2028,
+        "dos mil veintitrés": 2023,
+        "dos mil veintitres": 2023,
+        "dos mil veintidós": 2022,
+        "dos mil veintidos": 2022,
     }
 
     fecha_pats = [
@@ -358,7 +538,7 @@ def parsear_entrevista(texto: str) -> Dict[str, str]:
         if m:
             g = m.groups()
             dia = g[0]
-            if re.search(r'[a-záéíóúñ]', g[1], re.I):
+            if re.search(r"[a-záéíóúñ]", g[1], re.I):
                 mes_num = MESES.get(g[1].lower(), 0)
             else:
                 mes_num = int(g[1]) if g[1].isdigit() else 0
@@ -367,8 +547,8 @@ def parsear_entrevista(texto: str) -> Dict[str, str]:
                 anio = "20" + str(anio)
             if mes_num and 1 <= mes_num <= 12:
                 result["FECHA DE INICIOS"] = f"{anio}-{mes_num:02d}-{int(dia):02d}"
-                result["AÑO"]  = str(anio)
-                result["MES"]  = str(mes_num)
+                result["AÑO"] = str(anio)
+                result["MES"] = str(mes_num)
                 break
 
     # Fechas escritas en texto legal ("el quince de febrero de dos mil veintiséis")
@@ -378,7 +558,7 @@ def parsear_entrevista(texto: str) -> Dict[str, str]:
             m = re.search(pat, tl, re.I)
             if m:
                 mes_num = MESES.get(m.group(1).lower(), 0)
-                anio    = _ANIOS_ES.get(m.group(2), 0)
+                anio = _ANIOS_ES.get(m.group(2), 0)
                 if mes_num and anio:
                     result["FECHA DE INICIOS"] = f"{anio}-{mes_num:02d}-{num_val:02d}"
                     result["AÑO"] = str(anio)
@@ -387,11 +567,31 @@ def parsear_entrevista(texto: str) -> Dict[str, str]:
 
     # ── MUNICIPIO ─────────────────────────────────────────────────
     municipios_tab = [
-        "jalpa de méndez","jalpa de mendez","cárdenas","cardenas","centla","comalcalco",
-        "cunduacán","cunduacan","nacajuca","paraíso","paraiso","huimanguillo",
-        "macuspana","palenque","tenosique","balancán","balancan",
-        "tacotalpa","teapa","jonuta","emiliano zapata","villahermosa","centro",
-        "jalpa","nacajuca",
+        "jalpa de méndez",
+        "jalpa de mendez",
+        "cárdenas",
+        "cardenas",
+        "centla",
+        "comalcalco",
+        "cunduacán",
+        "cunduacan",
+        "nacajuca",
+        "paraíso",
+        "paraiso",
+        "huimanguillo",
+        "macuspana",
+        "palenque",
+        "tenosique",
+        "balancán",
+        "balancan",
+        "tacotalpa",
+        "teapa",
+        "jonuta",
+        "emiliano zapata",
+        "villahermosa",
+        "centro",
+        "jalpa",
+        "nacajuca",
     ]
     for pat in [
         r"MUNICIPIO\s*[:\-\.]+\s*([A-ZÁÉÍÓÚÑA-Za-záéíóúñ\s]+?)(?:\s+TABASCO|\.|,|\n)",
@@ -416,9 +616,28 @@ def parsear_entrevista(texto: str) -> Dict[str, str]:
         result["MUNICIPIO"] = "JALPA DE MENDEZ"
 
     # ── CALIFICATIVO ──────────────────────────────────────────────
-    violencia_kw = ["machete","golpe","arma","disparo","machetazo","navaja","pistola",
-                    "golpeó","agredió","lesion","hirió","cortó","pateó","mordió",
-                    "quemó","estranguló","asfixió","amenazó","intimidó","cuchillo"]
+    violencia_kw = [
+        "machete",
+        "golpe",
+        "arma",
+        "disparo",
+        "machetazo",
+        "navaja",
+        "pistola",
+        "golpeó",
+        "agredió",
+        "lesion",
+        "hirió",
+        "cortó",
+        "pateó",
+        "mordió",
+        "quemó",
+        "estranguló",
+        "asfixió",
+        "amenazó",
+        "intimidó",
+        "cuchillo",
+    ]
     if any(v in tl for v in violencia_kw):
         result["CALIFICATIVO DEL DELITO"] = "Con violencia"
     else:
@@ -433,7 +652,7 @@ def parsear_entrevista(texto: str) -> Dict[str, str]:
     ]:
         m = re.search(pat, t_clean, re.I)
         if m:
-            val = m.group(1).strip().rstrip('.,')
+            val = m.group(1).strip().rstrip(".,")
             if len(val) > 5:
                 result["FISCAL INICIAL"] = val
                 break
@@ -442,7 +661,8 @@ def parsear_entrevista(texto: str) -> Dict[str, str]:
     testigos = re.findall(
         r"(?:testigo|presenció|presencia\s+de|en\s+presencia\s+de)\s*[:\-]?\s*"
         r"(?:C\.|SR\.|SRA\.|Lic\.)?\s*([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑA-Za-záéíóúñ\s]{6,50}?)(?:,|\.|;|\n)",
-        t_clean, re.I
+        t_clean,
+        re.I,
     )
     if testigos:
         result["TESTIGOS"] = " | ".join(
@@ -451,7 +671,7 @@ def parsear_entrevista(texto: str) -> Dict[str, str]:
 
     # ── NARRATIVA DE LOS HECHOS ────────────────────────────────────
     # Tomar el primer bloque de texto largo (>60 chars) — la narración principal
-    parrafos = [p.strip() for p in re.split(r'\n{2,}', t_clean) if len(p.strip()) > 60]
+    parrafos = [p.strip() for p in re.split(r"\n{2,}", t_clean) if len(p.strip()) > 60]
     if parrafos:
         # Preferir el párrafo que contenga verbos de acción
         mejor = parrafos[0]
@@ -466,20 +686,21 @@ def parsear_entrevista(texto: str) -> Dict[str, str]:
 
     # ── DEFAULTS ──────────────────────────────────────────────────
     defaults = {
-        "VICEFISCALÍA":          "Delitos Comunes",
-        "FISCALÍA O AGENCIA":    "JDM",
-        "NACIONALIDAD VICTIMA":  "Mexicana",
+        "VICEFISCALÍA": "Delitos Comunes",
+        "FISCALÍA O AGENCIA": "JDM",
+        "NACIONALIDAD VICTIMA": "Mexicana",
         "NACIONALIDAD IMPUTADO": "Mexicana",
-        "¿DETENIDO?":            "NO",
-        "OBSERVACIONES":         "",
-        "INFORMACIÓN CORRECTA":  "",
-        "ALIAS":                 "",
+        "¿DETENIDO?": "NO",
+        "OBSERVACIONES": "",
+        "INFORMACIÓN CORRECTA": "",
+        "ALIAS": "",
     }
     for k, v in defaults.items():
         if k not in result:
             result[k] = v
 
     return result
+
 
 # ─────────────────────────────────────────────────────
 #  HELPERS
@@ -491,17 +712,19 @@ def safe_path(filename: str, directory: str) -> str:
         raise HTTPException(400, "Nombre de archivo inválido")
     return full
 
+
 def copy_cell_style(src, dst):
     if src.has_style:
-        dst.font      = copy.copy(src.font)
-        dst.fill      = copy.copy(src.fill)
-        dst.border    = copy.copy(src.border)
+        dst.font = copy.copy(src.font)
+        dst.fill = copy.copy(src.fill)
+        dst.border = copy.copy(src.border)
         dst.alignment = copy.copy(src.alignment)
         dst.number_format = src.number_format
 
+
 def replace_in_paragraph(para, fields: Dict[str, str]):
     full = "".join(r.text for r in para.runs)
-    new  = full
+    new = full
     for k, v in fields.items():
         new = new.replace(k, str(v))
     if new != full and para.runs:
@@ -509,50 +732,78 @@ def replace_in_paragraph(para, fields: Dict[str, str]):
         for r in para.runs[1:]:
             r.text = ""
 
+
 def map_inicio_to_novedad(row: dict) -> dict:
-    folio     = str(row.get("FOLIO_NUC", "")).strip()
-    agencia   = str(row.get("FISCALÍA O AGENCIA", "JDM")).strip()
+    folio = str(row.get("FOLIO_NUC", "")).strip()
+    agencia = str(row.get("FISCALÍA O AGENCIA", "JDM")).strip()
     narrativa = str(row.get("NARRATIVA DE LOS HECHOS", "")).strip()
-    detalle   = f"CI-{agencia}-{folio}.- {narrativa}" if folio and narrativa else narrativa
-    calif     = str(row.get("CALIFICATIVO DEL DELITO", "")).strip()
+    detalle = (
+        f"CI-{agencia}-{folio}.- {narrativa}" if folio and narrativa else narrativa
+    )
+    calif = str(row.get("CALIFICATIVO DEL DELITO", "")).strip()
     violencia = "Con violencia" if "con" in calif.lower() else "Sin violencia"
     return {
-        "Desglose de delitos":         str(row.get("DELITO FINAL", row.get("DELITO PRINCIPAL", ""))).strip().upper(),
-        "Detenido":                    str(row.get("¿DETENIDO?", "NO")).strip().upper(),
+        "Desglose de delitos": str(
+            row.get("DELITO FINAL", row.get("DELITO PRINCIPAL", ""))
+        )
+        .strip()
+        .upper(),
+        "Detenido": str(row.get("¿DETENIDO?", "NO")).strip().upper(),
         "Con Violencia/sin violencia": violencia,
-        "Tipo de violencia":           "",
-        "Nombre de la victima":        str(row.get("VICTIMA ", row.get("VICTIMA", ""))).strip(),
-        "Nombre del Imputado":         str(row.get("IMPUTADO ", row.get("IMPUTADO", ""))).strip(),
-        "Medidas de proteccion":       "",
-        "Municipio":                   str(row.get("MUNICIPIO", "")).strip(),
-        "Detalles relevantes":         detalle,
+        "Tipo de violencia": "",
+        "Nombre de la victima": str(
+            row.get("VICTIMA ", row.get("VICTIMA", ""))
+        ).strip(),
+        "Nombre del Imputado": str(
+            row.get("IMPUTADO ", row.get("IMPUTADO", ""))
+        ).strip(),
+        "Medidas de proteccion": "",
+        "Municipio": str(row.get("MUNICIPIO", "")).strip(),
+        "Detalles relevantes": detalle,
     }
+
 
 # ─────────────────────────────────────────────────────
 #  MODELOS
 # ─────────────────────────────────────────────────────
 class ExcelRequest(BaseModel):
-    filename: str; sheet_name: str = "Datos"; data: List[Dict[str, Any]]
+    filename: str
+    sheet_name: str = "Datos"
+    data: List[Dict[str, Any]]
+
 
 class WordRequest(BaseModel):
-    filename: str; title: str; paragraphs: List[str]
+    filename: str
+    title: str
+    paragraphs: List[str]
+
 
 class FillWordRequest(BaseModel):
-    template_name: str; output_filename: str
-    fields: Dict[str, str]; table_data: Optional[List[Dict[str, Any]]] = None
+    template_name: str
+    output_filename: str
+    fields: Dict[str, str]
+    table_data: Optional[List[Dict[str, Any]]] = None
+
 
 class FillExcelRequest(BaseModel):
-    template_name: str; output_filename: str
-    data: List[Dict[str, Any]]; start_row: Optional[int] = None
+    template_name: str
+    output_filename: str
+    data: List[Dict[str, Any]]
+    start_row: Optional[int] = None
+
 
 class FillPdfRequest(BaseModel):
-    template_name: str; output_filename: str; fields: Dict[str, str]
+    template_name: str
+    output_filename: str
+    fields: Dict[str, str]
+
 
 class IniciosToNovedadesRequest(BaseModel):
     reporte_template: str = "REPORTE_DIARIO.xlsx"
     novedades_template: str = "NOVEDADES.xlsx"
     output_filename: str = "NOVEDADES_GENERADAS"
     fecha: Optional[str] = None
+
 
 class EntrevistaRequest(BaseModel):
     texto_entrevista: str
@@ -563,13 +814,17 @@ class EntrevistaRequest(BaseModel):
     reporte_template: str = "REPORTE_DIARIO.xlsx"
     output_filename: str = "REPORTE_CON_ENTREVISTA"
 
+
 # ─────────────────────────────────────────────────────
 #  ENDPOINTS — SALUD
 # ─────────────────────────────────────────────────────
 @app.get("/api/health")
 async def health():
-    templates = len([f for f in os.listdir(TPLS_DIR) if f.endswith((".docx",".xlsx",".pdf"))])
+    templates = len(
+        [f for f in os.listdir(TPLS_DIR) if f.endswith((".docx", ".xlsx", ".pdf"))]
+    )
     return {"status": "ok", "version": "3.0.0", "templates_stored": templates}
+
 
 # ─────────────────────────────────────────────────────
 #  ENDPOINTS — GENERAR DESDE CERO
@@ -579,26 +834,39 @@ async def generate_excel(req: ExcelRequest):
     try:
         path = os.path.join(TEMP_DIR, f"{req.filename}_{uuid.uuid4().hex[:8]}.xlsx")
         pd.DataFrame(req.data).to_excel(path, sheet_name=req.sheet_name, index=False)
-        return FileResponse(path, filename=f"{req.filename}.xlsx",
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-    except Exception as e: raise HTTPException(500, str(e))
+        return FileResponse(
+            path,
+            filename=f"{req.filename}.xlsx",
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
 
 @app.post("/api/generate-word")
 async def generate_word(req: WordRequest):
     try:
         path = os.path.join(TEMP_DIR, f"{req.filename}_{uuid.uuid4().hex[:8]}.docx")
-        doc = Document(); doc.add_heading(req.title, 1)
-        for p in req.paragraphs: doc.add_paragraph(p)
+        doc = Document()
+        doc.add_heading(req.title, 1)
+        for p in req.paragraphs:
+            doc.add_paragraph(p)
         doc.save(path)
-        return FileResponse(path, filename=f"{req.filename}.docx",
-            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
-    except Exception as e: raise HTTPException(500, str(e))
+        return FileResponse(
+            path,
+            filename=f"{req.filename}.docx",
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
 
 @app.post("/api/extract-pdf")
 async def extract_pdf(file: UploadFile = File(...)):
     """Compatibilidad: redirige al endpoint universal."""
     result = await extract_text_from_file(file)
     return {"filename": result["filename"], "raw_text": result["text"]}
+
 
 @app.post("/api/extract-text-from-file")
 async def extract_text_from_file(file: UploadFile = File(...)):
@@ -608,9 +876,9 @@ async def extract_text_from_file(file: UploadFile = File(...)):
     PDF escaneado o imagen → OCR con Tesseract + preprocesamiento OpenCV.
     Funciona aunque Tesseract no esté instalado (devuelve advertencia).
     """
-    ext  = os.path.splitext(file.filename or "")[1].lower()
+    ext = os.path.splitext(file.filename or "")[1].lower()
     content = await file.read()
-    text    = ""
+    text = ""
     warning = None
 
     if ext == ".pdf":
@@ -622,30 +890,48 @@ async def extract_text_from_file(file: UploadFile = File(...)):
                 paginas = []
                 for page in pdf.pages:
                     t = page.extract_text()
-                    if t: paginas.append(t)
+                    if t:
+                        paginas.append(t)
                 text = "\n".join(paginas)
 
             # Si el PDF es escaneado (poco texto), intentar OCR
             if len(text.strip()) < 80:
                 if _OCR_DISPONIBLE and os.path.exists(TESS_EXE):
-                    warning = "PDF escaneado — aplicando OCR (puede tardar unos segundos)"
+                    warning = (
+                        "PDF escaneado — aplicando OCR (puede tardar unos segundos)"
+                    )
                     # Extraer imágenes de cada página con pdfplumber y aplicar OCR
                     ocr_pages = []
                     with pdfplumber.open(tmp) as pdf:
                         for page in pdf.pages:
                             img = page.to_image(resolution=200).original
-                            nparr = np.frombuffer(img.tobytes(), np.uint8) if hasattr(img, "tobytes") else None
+                            nparr = (
+                                np.frombuffer(img.tobytes(), np.uint8)
+                                if hasattr(img, "tobytes")
+                                else None
+                            )
                             if nparr is not None:
-                                cv_img = cv2.imdecode(nparr, cv2.IMREAD_COLOR) if nparr is not None else None
+                                cv_img = (
+                                    cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+                                    if nparr is not None
+                                    else None
+                                )
                             else:
                                 # Convertir PIL a numpy
                                 cv_img = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
                             if cv_img is not None:
-                                gray   = cv2.cvtColor(cv_img, cv2.COLOR_BGR2GRAY)
-                                thresh = cv2.adaptiveThreshold(gray, 255,
-                                    cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
+                                gray = cv2.cvtColor(cv_img, cv2.COLOR_BGR2GRAY)
+                                thresh = cv2.adaptiveThreshold(
+                                    gray,
+                                    255,
+                                    cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                    cv2.THRESH_BINARY,
+                                    11,
+                                    2,
+                                )
                                 t = pytesseract.image_to_string(thresh, lang="spa")
-                                if t.strip(): ocr_pages.append(t.strip())
+                                if t.strip():
+                                    ocr_pages.append(t.strip())
                     text = "\n".join(ocr_pages)
                 else:
                     warning = "PDF parece escaneado. Para extracción completa, sube la imagen directamente."
@@ -655,88 +941,125 @@ async def extract_text_from_file(file: UploadFile = File(...)):
 
     elif ext in (".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".tif", ".webp"):
         if not _OCR_DISPONIBLE:
-            raise HTTPException(400,
-                "OCR no disponible. Instala NEXUS de nuevo para descargar Tesseract portable.")
+            raise HTTPException(
+                400,
+                "OCR no disponible. Instala NEXUS de nuevo para descargar Tesseract portable.",
+            )
         if not os.path.exists(TESS_EXE):
-            raise HTTPException(400,
-                "Tesseract portable no encontrado. Ejecuta NEXUS_INICIAR.bat para instalarlo.")
+            raise HTTPException(
+                400,
+                "Tesseract portable no encontrado. Ejecuta NEXUS_INICIAR.bat para instalarlo.",
+            )
         try:
-            nparr  = np.frombuffer(content, np.uint8)
+            nparr = np.frombuffer(content, np.uint8)
             cv_img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
             if cv_img is None:
                 pil_img = _PILImage.open(io.BytesIO(content))
-                cv_img  = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
+                cv_img = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
             # Preprocesamiento: escala de grises + umbral adaptativo
-            gray   = cv2.cvtColor(cv_img, cv2.COLOR_BGR2GRAY)
-            thresh = cv2.adaptiveThreshold(gray, 255,
-                cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
+            gray = cv2.cvtColor(cv_img, cv2.COLOR_BGR2GRAY)
+            thresh = cv2.adaptiveThreshold(
+                gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2
+            )
             text = pytesseract.image_to_string(thresh, lang="spa")
         except Exception as e:
             raise HTTPException(400, f"Error procesando imagen: {e}")
     else:
-        raise HTTPException(400,
-            f"Formato '{ext}' no soportado. Usa PDF, JPG, PNG, BMP o TIFF.")
+        raise HTTPException(
+            400, f"Formato '{ext}' no soportado. Usa PDF, JPG, PNG, BMP o TIFF."
+        )
 
     return {"text": text.strip(), "warning": warning, "filename": file.filename}
+
 
 # ─────────────────────────────────────────────────────
 #  ENDPOINTS — PLANTILLAS
 # ─────────────────────────────────────────────────────
 @app.post("/api/template/upload")
 async def upload_template(file: UploadFile = File(...)):
-    if not any(file.filename.endswith(e) for e in (".docx",".xlsx",".pdf")):
+    if not any(file.filename.endswith(e) for e in (".docx", ".xlsx", ".pdf")):
         raise HTTPException(400, "Solo .docx, .xlsx, .pdf")
     try:
         dest = safe_path(file.filename, TPLS_DIR)
         content = await file.read()
-        with open(dest, "wb") as f: f.write(content)
+        with open(dest, "wb") as f:
+            f.write(content)
         analysis = await _analyze_template(dest, file.filename)
         return {"status": "ok", "filename": file.filename, "analysis": analysis}
-    except HTTPException: raise
-    except Exception as e: raise HTTPException(500, str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
 
 @app.get("/api/template/list")
 async def list_templates():
     files = []
     for f in os.listdir(TPLS_DIR):
-        if any(f.endswith(e) for e in (".docx",".xlsx",".pdf")):
+        if any(f.endswith(e) for e in (".docx", ".xlsx", ".pdf")):
             full = os.path.join(TPLS_DIR, f)
-            files.append({"name": f, "size_kb": round(os.path.getsize(full)/1024,1),
-                          "type": f.rsplit(".",1)[-1].upper()})
+            files.append(
+                {
+                    "name": f,
+                    "size_kb": round(os.path.getsize(full) / 1024, 1),
+                    "type": f.rsplit(".", 1)[-1].upper(),
+                }
+            )
     return {"templates": files}
+
 
 @app.get("/api/template/analyze/{filename}")
 async def analyze_template(filename: str):
     path = safe_path(filename, TPLS_DIR)
-    if not os.path.exists(path): raise HTTPException(404, f"'{filename}' no encontrada")
+    if not os.path.exists(path):
+        raise HTTPException(404, f"'{filename}' no encontrada")
     return {"filename": filename, "analysis": await _analyze_template(path, filename)}
 
+
 async def _analyze_template(path: str, filename: str) -> dict:
-    analysis = {"type":"","fields":[],"tables":[],"columns":[],"info":""}
+    analysis = {"type": "", "fields": [], "tables": [], "columns": [], "info": ""}
     try:
         if filename.endswith(".docx"):
             analysis["type"] = "word"
-            doc = Document(path); found = set()
+            doc = Document(path)
+            found = set()
             for para in doc.paragraphs:
                 found.update(re.findall(r"\{\{([^}]+)\}\}", para.text))
             tables_info = []
             for i, table in enumerate(doc.tables):
-                headers = [c.text.strip() for c in table.rows[0].cells] if table.rows else []
+                headers = (
+                    [c.text.strip() for c in table.rows[0].cells] if table.rows else []
+                )
                 tf = set()
                 for row in table.rows:
                     for cell in row.cells:
                         tf.update(re.findall(r"\{\{([^}]+)\}\}", cell.text))
-                tables_info.append({"index":i,"headers":headers,"rows":len(table.rows),"fields":list(tf)})
+                tables_info.append(
+                    {
+                        "index": i,
+                        "headers": headers,
+                        "rows": len(table.rows),
+                        "fields": list(tf),
+                    }
+                )
                 found.update(tf)
-            analysis["fields"]  = [f"{{{{{f}}}}}" for f in sorted(found)]
-            analysis["tables"]  = tables_info
-            analysis["info"]    = f"{len(doc.paragraphs)} párrafos, {len(doc.tables)} tabla(s)"
+            analysis["fields"] = [f"{{{{{f}}}}}" for f in sorted(found)]
+            analysis["tables"] = tables_info
+            analysis["info"] = (
+                f"{len(doc.paragraphs)} párrafos, {len(doc.tables)} tabla(s)"
+            )
         elif filename.endswith(".xlsx"):
             analysis["type"] = "excel"
             xl = pd.ExcelFile(path)
             for sheet in xl.sheet_names:
                 df = xl.parse(sheet, nrows=5)
-                analysis["columns"].append({"sheet":sheet,"headers":list(df.columns.astype(str)),"sample_rows":len(df)})
+                analysis["columns"].append(
+                    {
+                        "sheet": sheet,
+                        "headers": list(df.columns.astype(str)),
+                        "sample_rows": len(df),
+                    }
+                )
             analysis["info"] = f"{len(xl.sheet_names)} hoja(s)"
         elif filename.endswith(".pdf"):
             analysis["type"] = "pdf"
@@ -744,37 +1067,53 @@ async def _analyze_template(path: str, filename: str) -> dict:
                 text = "".join(p.extract_text() or "" for p in pdf.pages)
             matches = re.findall(r"\{\{([^}]+)\}\}", text)
             analysis["fields"] = [f"{{{{{m}}}}}" for m in set(matches)]
-            analysis["info"]   = f"PDF, {len(analysis['fields'])} campo(s) detectados"
+            analysis["info"] = f"PDF, {len(analysis['fields'])} campo(s) detectados"
     except Exception as e:
         analysis["info"] = f"Error: {e}"
     return analysis
 
+
 @app.post("/api/template/fill-word")
 async def fill_word_template(req: FillWordRequest):
     path = safe_path(req.template_name, TPLS_DIR)
-    if not os.path.exists(path): raise HTTPException(404, f"'{req.template_name}' no encontrada")
+    if not os.path.exists(path):
+        raise HTTPException(404, f"'{req.template_name}' no encontrada")
     try:
         doc = Document(path)
-        for para in doc.paragraphs: replace_in_paragraph(para, req.fields)
+        for para in doc.paragraphs:
+            replace_in_paragraph(para, req.fields)
         for section in doc.sections:
-            for para in section.header.paragraphs: replace_in_paragraph(para, req.fields)
-            for para in section.footer.paragraphs: replace_in_paragraph(para, req.fields)
+            for para in section.header.paragraphs:
+                replace_in_paragraph(para, req.fields)
+            for para in section.footer.paragraphs:
+                replace_in_paragraph(para, req.fields)
         for table in doc.tables:
             for row in table.rows:
                 for cell in row.cells:
-                    for para in cell.paragraphs: replace_in_paragraph(para, req.fields)
+                    for para in cell.paragraphs:
+                        replace_in_paragraph(para, req.fields)
             if req.table_data:
-                headers = [c.text.strip() for c in table.rows[0].cells] if table.rows else []
+                headers = (
+                    [c.text.strip() for c in table.rows[0].cells] if table.rows else []
+                )
                 if headers and set(req.table_data[0].keys()).intersection(set(headers)):
                     _fill_table(table, req.table_data)
-        out = os.path.join(TEMP_DIR, f"{req.output_filename}_{uuid.uuid4().hex[:8]}.docx")
+        out = os.path.join(
+            TEMP_DIR, f"{req.output_filename}_{uuid.uuid4().hex[:8]}.docx"
+        )
         doc.save(out)
-        return FileResponse(out, filename=f"{req.output_filename}.docx",
-            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
-    except Exception as e: raise HTTPException(500, str(e))
+        return FileResponse(
+            out,
+            filename=f"{req.output_filename}.docx",
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
 
 def _fill_table(table, data):
-    if not data or len(table.rows) < 2: return
+    if not data or len(table.rows) < 2:
+        return
     template_row = table.rows[-1]
     headers = [c.text.strip() for c in table.rows[0].cells]
     for row_data in data:
@@ -785,14 +1124,19 @@ def _fill_table(table, data):
             if i < len(headers):
                 val = str(row_data.get(headers[i], ""))
                 for para in cell.paragraphs:
-                    if para.runs: para.runs[0].text = val; [setattr(r,"text","") for r in para.runs[1:]]
+                    if para.runs:
+                        para.runs[0].text = val
+                        [setattr(r, "text", "") for r in para.runs[1:]]
+
 
 @app.post("/api/template/fill-excel")
 async def fill_excel_template(req: FillExcelRequest):
     path = safe_path(req.template_name, TPLS_DIR)
-    if not os.path.exists(path): raise HTTPException(404, f"'{req.template_name}' no encontrada")
+    if not os.path.exists(path):
+        raise HTTPException(404, f"'{req.template_name}' no encontrada")
     try:
         import openpyxl
+
         wb = openpyxl.load_workbook(path)
         ws = wb.active
         headers, header_row = [], None
@@ -802,25 +1146,39 @@ async def fill_excel_template(req: FillExcelRequest):
                 header_row = row[0].row
                 headers = [c.value for c in row]
                 break
-        if not headers: raise HTTPException(400, "Sin encabezados en la plantilla")
+        if not headers:
+            raise HTTPException(400, "Sin encabezados en la plantilla")
         last = header_row
-        for row in ws.iter_rows(min_row=header_row+1):
-            if any(c.value is not None for c in row): last = row[0].row
+        for row in ws.iter_rows(min_row=header_row + 1):
+            if any(c.value is not None for c in row):
+                last = row[0].row
         start = req.start_row or last + 1
-        style_cells = [ws.cell(row=max(last,header_row+1), column=i+1) for i in range(len(headers))]
+        style_cells = [
+            ws.cell(row=max(last, header_row + 1), column=i + 1)
+            for i in range(len(headers))
+        ]
         for r_idx, row_data in enumerate(req.data):
             for c_idx, header in enumerate(headers):
-                if header is None: continue
+                if header is None:
+                    continue
                 val = row_data.get(str(header), row_data.get(header, ""))
-                cell = ws.cell(row=start+r_idx, column=c_idx+1, value=val)
+                cell = ws.cell(row=start + r_idx, column=c_idx + 1, value=val)
                 if c_idx < len(style_cells) and style_cells[c_idx].has_style:
                     copy_cell_style(style_cells[c_idx], cell)
-        out = os.path.join(TEMP_DIR, f"{req.output_filename}_{uuid.uuid4().hex[:8]}.xlsx")
+        out = os.path.join(
+            TEMP_DIR, f"{req.output_filename}_{uuid.uuid4().hex[:8]}.xlsx"
+        )
         wb.save(out)
-        return FileResponse(out, filename=f"{req.output_filename}.xlsx",
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-    except HTTPException: raise
-    except Exception as e: raise HTTPException(500, str(e))
+        return FileResponse(
+            out,
+            filename=f"{req.output_filename}.xlsx",
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
 
 # ─────────────────────────────────────────────────────
 #  ENDPOINTS — CONVERSIÓN / CICLO DOCUMENTAL
@@ -830,35 +1188,48 @@ async def parse_entrevista_endpoint(req: EntrevistaRequest):
     campos = parsear_entrevista(req.texto_entrevista)
     if req.nombre_victima:
         campos["VICTIMA "] = req.nombre_victima.upper()
-        campos["VICTIMA"]  = req.nombre_victima.upper()
-    if req.folio_nuc:   campos["FOLIO_NUC"]     = req.folio_nuc
-    if req.fiscal:      campos["FISCAL INICIAL"] = req.fiscal
-    if req.detenido:    campos["¿DETENIDO?"]     = req.detenido.upper()
+        campos["VICTIMA"] = req.nombre_victima.upper()
+    if req.folio_nuc:
+        campos["FOLIO_NUC"] = req.folio_nuc
+    if req.fiscal:
+        campos["FISCAL INICIAL"] = req.fiscal
+    if req.detenido:
+        campos["¿DETENIDO?"] = req.detenido.upper()
 
-    pendientes = [f for f in ["VICTIMA ","FOLIO_NUC","DELITO PRINCIPAL","IMPUTADO ","MUNICIPIO"]
-                  if not campos.get(f)]
+    pendientes = [
+        f
+        for f in ["VICTIMA ", "FOLIO_NUC", "DELITO PRINCIPAL", "IMPUTADO ", "MUNICIPIO"]
+        if not campos.get(f)
+    ]
     return {
         "campos_detectados": campos,
-        "total_detectados":  len([v for v in campos.values() if v]),
+        "total_detectados": len([v for v in campos.values() if v]),
         "campos_pendientes": pendientes,
-        "listo_para_excel":  len(pendientes) == 0
+        "listo_para_excel": len(pendientes) == 0,
     }
+
 
 @app.post("/api/convert/entrevista-to-excel")
 async def entrevista_to_excel(req: EntrevistaRequest):
     reporte_path = safe_path(req.reporte_template, TPLS_DIR)
     if not os.path.exists(reporte_path):
-        raise HTTPException(404, f"Plantilla '{req.reporte_template}' no encontrada en /plantillas")
+        raise HTTPException(
+            404, f"Plantilla '{req.reporte_template}' no encontrada en /plantillas"
+        )
     campos = parsear_entrevista(req.texto_entrevista)
     if req.nombre_victima:
         campos["VICTIMA "] = req.nombre_victima.upper()
-        campos["VICTIMA"]  = req.nombre_victima.upper()
-    if req.folio_nuc:   campos["FOLIO_NUC"]     = req.folio_nuc
-    if req.fiscal:      campos["FISCAL INICIAL"] = req.fiscal
-    if req.detenido:    campos["¿DETENIDO?"]     = req.detenido.upper()
+        campos["VICTIMA"] = req.nombre_victima.upper()
+    if req.folio_nuc:
+        campos["FOLIO_NUC"] = req.folio_nuc
+    if req.fiscal:
+        campos["FISCAL INICIAL"] = req.fiscal
+    if req.detenido:
+        campos["¿DETENIDO?"] = req.detenido.upper()
 
     try:
         import openpyxl
+
         wb = openpyxl.load_workbook(reporte_path)
         if "Inicios de Carpetas" not in wb.sheetnames:
             raise HTTPException(400, "Hoja 'Inicios de Carpetas' no encontrada")
@@ -866,21 +1237,36 @@ async def entrevista_to_excel(req: EntrevistaRequest):
         headers = [c.value for c in list(ws.iter_rows(min_row=1, max_row=1))[0]]
         last_row = 1
         for row in ws.iter_rows(min_row=2):
-            if any(c.value for c in row): last_row = row[0].row
+            if any(c.value for c in row):
+                last_row = row[0].row
         style_ref = max(last_row, 2)
-        new_row   = last_row + 1
+        new_row = last_row + 1
         for col_idx, header in enumerate(headers, 1):
-            if not header: continue
-            val = campos.get(header) or campos.get(str(header).strip()) or campos.get(str(header)+" ") or ""
+            if not header:
+                continue
+            val = (
+                campos.get(header)
+                or campos.get(str(header).strip())
+                or campos.get(str(header) + " ")
+                or ""
+            )
             if val:
                 cell = ws.cell(row=new_row, column=col_idx, value=val)
                 copy_cell_style(ws.cell(row=style_ref, column=col_idx), cell)
-        out = os.path.join(TEMP_DIR, f"{req.output_filename}_{uuid.uuid4().hex[:8]}.xlsx")
+        out = os.path.join(
+            TEMP_DIR, f"{req.output_filename}_{uuid.uuid4().hex[:8]}.xlsx"
+        )
         wb.save(out)
-        return FileResponse(out, filename=f"{req.output_filename}.xlsx",
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-    except HTTPException: raise
-    except Exception as e: raise HTTPException(500, str(e))
+        return FileResponse(
+            out,
+            filename=f"{req.output_filename}.xlsx",
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
 
 @app.post("/api/convert/preview-inicios")
 async def preview_inicios(req: IniciosToNovedadesRequest):
@@ -889,6 +1275,7 @@ async def preview_inicios(req: IniciosToNovedadesRequest):
         raise HTTPException(404, f"'{req.reporte_template}' no encontrada")
     try:
         import openpyxl
+
         wb = openpyxl.load_workbook(reporte_path, data_only=True)
         if "Inicios de Carpetas" not in wb.sheetnames:
             raise HTTPException(400, "Hoja 'Inicios de Carpetas' no encontrada")
@@ -898,29 +1285,41 @@ async def preview_inicios(req: IniciosToNovedadesRequest):
         for row in ws.iter_rows(min_row=2, values_only=True):
             if any(v for v in row):
                 d = dict(zip(headers, row))
-                if req.fecha and req.fecha not in str(d.get("FECHA DE INICIOS","")):
+                if req.fecha and req.fecha not in str(d.get("FECHA DE INICIOS", "")):
                     continue
-                rows.append({
-                    "folio":     str(d.get("FOLIO_NUC","")),
-                    "delito":    str(d.get("DELITO FINAL", d.get("DELITO PRINCIPAL",""))),
-                    "victima":   str(d.get("VICTIMA ", d.get("VICTIMA",""))),
-                    "imputado":  str(d.get("IMPUTADO ", d.get("IMPUTADO",""))),
-                    "municipio": str(d.get("MUNICIPIO","")),
-                    "detenido":  str(d.get("¿DETENIDO?","NO")),
-                    "narrativa": str(d.get("NARRATIVA DE LOS HECHOS",""))[:200],
-                })
+                rows.append(
+                    {
+                        "folio": str(d.get("FOLIO_NUC", "")),
+                        "delito": str(
+                            d.get("DELITO FINAL", d.get("DELITO PRINCIPAL", ""))
+                        ),
+                        "victima": str(d.get("VICTIMA ", d.get("VICTIMA", ""))),
+                        "imputado": str(d.get("IMPUTADO ", d.get("IMPUTADO", ""))),
+                        "municipio": str(d.get("MUNICIPIO", "")),
+                        "detenido": str(d.get("¿DETENIDO?", "NO")),
+                        "narrativa": str(d.get("NARRATIVA DE LOS HECHOS", ""))[:200],
+                    }
+                )
         return {"total": len(rows), "rows": rows}
-    except HTTPException: raise
-    except Exception as e: raise HTTPException(500, str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
 
 @app.post("/api/convert/inicios-to-novedades")
 async def inicios_to_novedades(req: IniciosToNovedadesRequest):
-    reporte_path  = safe_path(req.reporte_template,  TPLS_DIR)
+    reporte_path = safe_path(req.reporte_template, TPLS_DIR)
     novedades_path = safe_path(req.novedades_template, TPLS_DIR)
-    for p, n in [(reporte_path, req.reporte_template),(novedades_path, req.novedades_template)]:
-        if not os.path.exists(p): raise HTTPException(404, f"'{n}' no encontrada en /plantillas")
+    for p, n in [
+        (reporte_path, req.reporte_template),
+        (novedades_path, req.novedades_template),
+    ]:
+        if not os.path.exists(p):
+            raise HTTPException(404, f"'{n}' no encontrada en /plantillas")
     try:
         import openpyxl
+
         wb_rep = openpyxl.load_workbook(reporte_path, data_only=True)
         if "Inicios de Carpetas" not in wb_rep.sheetnames:
             raise HTTPException(400, "Hoja 'Inicios de Carpetas' no encontrada")
@@ -930,9 +1329,11 @@ async def inicios_to_novedades(req: IniciosToNovedadesRequest):
         for row in ws_ini.iter_rows(min_row=2, values_only=True):
             if any(v for v in row):
                 d = dict(zip(headers, row))
-                if req.fecha and req.fecha not in str(d.get("FECHA DE INICIOS","")): continue
+                if req.fecha and req.fecha not in str(d.get("FECHA DE INICIOS", "")):
+                    continue
                 rows.append(d)
-        if not rows: raise HTTPException(400, "Sin datos en Inicios de Carpetas")
+        if not rows:
+            raise HTTPException(400, "Sin datos en Inicios de Carpetas")
 
         novedades_rows = [map_inicio_to_novedad(r) for r in rows]
 
@@ -944,17 +1345,27 @@ async def inicios_to_novedades(req: IniciosToNovedadesRequest):
         data_header_row = 3
         for i, row in enumerate(ws_nov.iter_rows(values_only=True), 1):
             if any("Desglose" in str(v) for v in row if v):
-                data_header_row = i; break
+                data_header_row = i
+                break
 
         nov_col_map = {
-            "Desglose de delitos":1,"Detenido":2,"Con Violencia/sin violencia":3,
-            "Tipo de violencia":4,"Nombre de la victima":5,"Nombre del Imputado":6,
-            "Medidas de proteccion":7,"Municipio":8,"Detalles relevantes":9,
+            "Desglose de delitos": 1,
+            "Detenido": 2,
+            "Con Violencia/sin violencia": 3,
+            "Tipo de violencia": 4,
+            "Nombre de la victima": 5,
+            "Nombre del Imputado": 6,
+            "Medidas de proteccion": 7,
+            "Municipio": 8,
+            "Detalles relevantes": 9,
         }
-        style_cells = {c: ws_nov.cell(row=data_header_row+1, column=c) for c in nov_col_map.values()}
+        style_cells = {
+            c: ws_nov.cell(row=data_header_row + 1, column=c)
+            for c in nov_col_map.values()
+        }
 
         # Limpiar filas existentes
-        for r in range(data_header_row+1, ws_nov.max_row+1):
+        for r in range(data_header_row + 1, ws_nov.max_row + 1):
             for c in range(1, 13):
                 ws_nov.cell(row=r, column=c).value = None
 
@@ -962,16 +1373,24 @@ async def inicios_to_novedades(req: IniciosToNovedadesRequest):
         for r_idx, nov in enumerate(novedades_rows):
             rn = data_header_row + 1 + r_idx
             for field, col_idx in nov_col_map.items():
-                cell = ws_nov.cell(row=rn, column=col_idx, value=nov.get(field,""))
+                cell = ws_nov.cell(row=rn, column=col_idx, value=nov.get(field, ""))
                 if col_idx in style_cells and style_cells[col_idx].has_style:
                     copy_cell_style(style_cells[col_idx], cell)
 
-        out = os.path.join(TEMP_DIR, f"{req.output_filename}_{uuid.uuid4().hex[:8]}.xlsx")
+        out = os.path.join(
+            TEMP_DIR, f"{req.output_filename}_{uuid.uuid4().hex[:8]}.xlsx"
+        )
         wb_nov.save(out)
-        return FileResponse(out, filename=f"{req.output_filename}.xlsx",
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-    except HTTPException: raise
-    except Exception as e: raise HTTPException(500, str(e))
+        return FileResponse(
+            out,
+            filename=f"{req.output_filename}.xlsx",
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
 
 # ─────────────────────────────────────────────────────
 #  PARSER DE REPORTES DE AUDIENCIA — v2 MULTI-FORMATO
@@ -987,82 +1406,125 @@ async def inicios_to_novedades(req: IniciosToNovedadesRequest):
 # ─────────────────────────────────────────────────────
 
 MESES_NUM = {
-    "enero":1,"febrero":2,"marzo":3,"abril":4,"mayo":5,"junio":6,
-    "julio":7,"agosto":8,"septiembre":9,"octubre":10,"noviembre":11,"diciembre":12,
-    "jan":1,"feb":2,"mar":3,"apr":4,"jun":6,"jul":7,"aug":8,
-    "sep":9,"oct":10,"nov":11,"dec":12,
+    "enero": 1,
+    "febrero": 2,
+    "marzo": 3,
+    "abril": 4,
+    "mayo": 5,
+    "junio": 6,
+    "julio": 7,
+    "agosto": 8,
+    "septiembre": 9,
+    "octubre": 10,
+    "noviembre": 11,
+    "diciembre": 12,
+    "jan": 1,
+    "feb": 2,
+    "mar": 3,
+    "apr": 4,
+    "jun": 6,
+    "jul": 7,
+    "aug": 8,
+    "sep": 9,
+    "oct": 10,
+    "nov": 11,
+    "dec": 12,
 }
 MESES_STR = {
-    "1":"ENERO","2":"FEBRERO","3":"MARZO","4":"ABRIL","5":"MAYO","6":"JUNIO",
-    "7":"JULIO","8":"AGOSTO","9":"SEPTIEMBRE","10":"OCTUBRE","11":"NOVIEMBRE","12":"DICIEMBRE",
-    "01":"ENERO","02":"FEBRERO","03":"MARZO","04":"ABRIL","05":"MAYO","06":"JUNIO",
-    "07":"JULIO","08":"AGOSTO","09":"SEPTIEMBRE","10":"OCTUBRE","11":"NOVIEMBRE","12":"DICIEMBRE",
+    "1": "ENERO",
+    "2": "FEBRERO",
+    "3": "MARZO",
+    "4": "ABRIL",
+    "5": "MAYO",
+    "6": "JUNIO",
+    "7": "JULIO",
+    "8": "AGOSTO",
+    "9": "SEPTIEMBRE",
+    "10": "OCTUBRE",
+    "11": "NOVIEMBRE",
+    "12": "DICIEMBRE",
+    "01": "ENERO",
+    "02": "FEBRERO",
+    "03": "MARZO",
+    "04": "ABRIL",
+    "05": "MAYO",
+    "06": "JUNIO",
+    "07": "JULIO",
+    "08": "AGOSTO",
+    "09": "SEPTIEMBRE",
+    "10": "OCTUBRE",
+    "11": "NOVIEMBRE",
+    "12": "DICIEMBRE",
 }
 
 TIPOS_AUDIENCIA_MAP = {
     # exactos
-    "inicial":"AUDIENCIA INICIAL",
-    "audiencia inicial":"AUDIENCIA INICIAL",
-    "inicial por cita":"AUDIENCIA INICIAL POR CITA",
-    "inicial sin detenido":"AUDIENCIA INICIAL SIN DETENIDO",
-    "intermedia":"AUDIENCIA INTERMEDIA",
-    "audiencia intermedia":"AUDIENCIA INTERMEDIA",
-    "intermedia (procedimiento abreviado)":"AUDIENCIA INTERMEDIA / PROC. ABREVIADO",
-    "juicio":"JUICIO ORAL",
-    "juicio oral":"JUICIO ORAL",
-    "juicio unitario":"JUICIO ORAL",
-    "cont juicio":"CONTINUACIÓN DE JUICIO",
-    "cont. juicio":"CONTINUACIÓN DE JUICIO",
-    "continuacion":"CONTINUACIÓN DE JUICIO",
-    "continuacion de juicio":"CONTINUACIÓN DE JUICIO",
-    "continuación de juicio":"CONTINUACIÓN DE JUICIO",
-    "continuacion de juicio oral":"CONTINUACIÓN DE JUICIO ORAL",
-    "juicio continuacion":"CONTINUACIÓN DE JUICIO",
-    "juicio continuación":"CONTINUACIÓN DE JUICIO",
-    "juicio cont":"CONTINUACIÓN DE JUICIO",
-    "cont. juicio oral":"CONTINUACIÓN DE JUICIO ORAL",
-    "abreviado":"PROCEDIMIENTO ABREVIADO",
-    "procedimiento abreviado":"PROCEDIMIENTO ABREVIADO",
-    "suspension":"SUSPENSIÓN CONDICIONAL DEL PROCESO",
-    "suspension condicional":"SUSPENSIÓN CONDICIONAL DEL PROCESO",
-    "suspension condicional del proceso":"SUSPENSIÓN CONDICIONAL DEL PROCESO",
-    "suspension condicional dep proceso":"SUSPENSIÓN CONDICIONAL DEL PROCESO",
-    "suspencion condicional":"SUSPENSIÓN CONDICIONAL DEL PROCESO",
-    "revision":"REVISIÓN",
-    "revision de suspencion condicional":"REVISIÓN DE SUSPENSIÓN CONDICIONAL",
-    "revision de suspension condicional":"REVISIÓN DE SUSPENSIÓN CONDICIONAL",
-    "alegatos":"ALEGATOS DE CLAUSURA",
-    "alegatos de clausura":"ALEGATOS DE CLAUSURA",
-    "juicio alegatos e individualizacion":"JUICIO — ALEGATOS E INDIVIDUALIZACIÓN",
-    "juicio individualizacion y pago de daños":"JUICIO — INDIVIDUALIZACIÓN Y PAGO DE DAÑOS",
-    "alegatos e individualizacion":"ALEGATOS E INDIVIDUALIZACIÓN",
-    "individualizacion":"INDIVIDUALIZACIÓN DE SANCIONES",
-    "prorroga":"PRÓRROGA DE PLAZO",
-    "prorroga de plazo de cierre de investigacion":"PRÓRROGA PLAZO CIERRE DE INVESTIGACIÓN",
-    "vinculacion":"AUDIENCIA INICIAL",
-    "vinculacion a proceso":"VINCULACIÓN A PROCESO",
+    "inicial": "AUDIENCIA INICIAL",
+    "audiencia inicial": "AUDIENCIA INICIAL",
+    "inicial por cita": "AUDIENCIA INICIAL POR CITA",
+    "inicial sin detenido": "AUDIENCIA INICIAL SIN DETENIDO",
+    "intermedia": "AUDIENCIA INTERMEDIA",
+    "audiencia intermedia": "AUDIENCIA INTERMEDIA",
+    "intermedia (procedimiento abreviado)": "AUDIENCIA INTERMEDIA / PROC. ABREVIADO",
+    "juicio": "JUICIO ORAL",
+    "juicio oral": "JUICIO ORAL",
+    "juicio unitario": "JUICIO ORAL",
+    "cont juicio": "CONTINUACIÓN DE JUICIO",
+    "cont. juicio": "CONTINUACIÓN DE JUICIO",
+    "continuacion": "CONTINUACIÓN DE JUICIO",
+    "continuacion de juicio": "CONTINUACIÓN DE JUICIO",
+    "continuación de juicio": "CONTINUACIÓN DE JUICIO",
+    "continuacion de juicio oral": "CONTINUACIÓN DE JUICIO ORAL",
+    "juicio continuacion": "CONTINUACIÓN DE JUICIO",
+    "juicio continuación": "CONTINUACIÓN DE JUICIO",
+    "juicio cont": "CONTINUACIÓN DE JUICIO",
+    "cont. juicio oral": "CONTINUACIÓN DE JUICIO ORAL",
+    "abreviado": "PROCEDIMIENTO ABREVIADO",
+    "procedimiento abreviado": "PROCEDIMIENTO ABREVIADO",
+    "suspension": "SUSPENSIÓN CONDICIONAL DEL PROCESO",
+    "suspension condicional": "SUSPENSIÓN CONDICIONAL DEL PROCESO",
+    "suspension condicional del proceso": "SUSPENSIÓN CONDICIONAL DEL PROCESO",
+    "suspension condicional dep proceso": "SUSPENSIÓN CONDICIONAL DEL PROCESO",
+    "suspencion condicional": "SUSPENSIÓN CONDICIONAL DEL PROCESO",
+    "revision": "REVISIÓN",
+    "revision de suspencion condicional": "REVISIÓN DE SUSPENSIÓN CONDICIONAL",
+    "revision de suspension condicional": "REVISIÓN DE SUSPENSIÓN CONDICIONAL",
+    "alegatos": "ALEGATOS DE CLAUSURA",
+    "alegatos de clausura": "ALEGATOS DE CLAUSURA",
+    "juicio alegatos e individualizacion": "JUICIO — ALEGATOS E INDIVIDUALIZACIÓN",
+    "juicio individualizacion y pago de daños": "JUICIO — INDIVIDUALIZACIÓN Y PAGO DE DAÑOS",
+    "alegatos e individualizacion": "ALEGATOS E INDIVIDUALIZACIÓN",
+    "individualizacion": "INDIVIDUALIZACIÓN DE SANCIONES",
+    "prorroga": "PRÓRROGA DE PLAZO",
+    "prorroga de plazo de cierre de investigacion": "PRÓRROGA PLAZO CIERRE DE INVESTIGACIÓN",
+    "vinculacion": "AUDIENCIA INICIAL",
+    "vinculacion a proceso": "VINCULACIÓN A PROCESO",
 }
+
 
 def _limpiar(s: str) -> str:
     """Limpia asteriscos WhatsApp/Markdown, espacios múltiples y guiones líderes."""
-    s = re.sub(r'\*+', '', s)
-    s = re.sub(r'^[\s\-–•]+', '', s)
-    s = re.sub(r'[ \t]{2,}', ' ', s)
+    s = re.sub(r"\*+", "", s)
+    s = re.sub(r"^[\s\-–•]+", "", s)
+    s = re.sub(r"[ \t]{2,}", " ", s)
     return s.strip()
+
 
 # Alias para compatibilidad
 def _limpiar_asteriscos(s: str) -> str:
     return _limpiar(s)
 
+
 def _normalizar_tipo(raw: str) -> str:
     """Normaliza el tipo de audiencia."""
-    clean = _limpiar(raw).strip().rstrip('.,').lower()
+    clean = _limpiar(raw).strip().rstrip(".,").lower()
     if clean in TIPOS_AUDIENCIA_MAP:
         return TIPOS_AUDIENCIA_MAP[clean]
     for k, v in TIPOS_AUDIENCIA_MAP.items():
         if k in clean or clean in k:
             return v
-    return _limpiar(raw).strip().rstrip('.,').upper()
+    return _limpiar(raw).strip().rstrip(".,").upper()
+
 
 def _normalizar_carpeta(raw: str) -> str:
     """
@@ -1070,36 +1532,39 @@ def _normalizar_carpeta(raw: str) -> str:
     Maneja: 'CI JDM 1013/2023', 'CI-JDM- 1013/2023', 'CI-JDM-/153/2025',
             'CI-JDM_I-1323/2021', 'CPJ- VHSA-4359/2016  CI-JDM-1372/2026'
     """
-    if not raw: return ""
+    if not raw:
+        return ""
     raw = _limpiar(raw).upper()
     # Si hay dos carpetas en el campo (CPJ + CI-JDM), tomar la CI-JDM
-    m = re.search(r'CI[-\s_]?JDM[-\s_I]*[-/]?\s*[\d/]+', raw, re.I)
+    m = re.search(r"CI[-\s_]?JDM[-\s_I]*[-/]?\s*[\d/]+", raw, re.I)
     if m:
         raw = m.group()
     # Normalizar espacios y guiones internos
     # CI JDM → CI-JDM
-    raw = re.sub(r'CI\s+JDM', 'CI-JDM', raw, flags=re.I)
+    raw = re.sub(r"CI\s+JDM", "CI-JDM", raw, flags=re.I)
     # CI-JDM- 1013  →  CI-JDM-1013
-    raw = re.sub(r'(CI-JDM[-_I]*)\s*[-/]?\s*(\d)', r'CI-JDM-\2', raw, flags=re.I)
+    raw = re.sub(r"(CI-JDM[-_I]*)\s*[-/]?\s*(\d)", r"CI-JDM-\2", raw, flags=re.I)
     # CI-JDM-/153  →  CI-JDM-153
-    raw = re.sub(r'CI-JDM-/', 'CI-JDM-', raw)
+    raw = re.sub(r"CI-JDM-/", "CI-JDM-", raw)
     # CI-JDM_I-  →  CI-JDM-
-    raw = re.sub(r'CI-JDM[-_][I]?-', 'CI-JDM-', raw)
+    raw = re.sub(r"CI-JDM[-_][I]?-", "CI-JDM-", raw)
     # Quitar dobles guiones
-    raw = re.sub(r'-{2,}', '-', raw)
+    raw = re.sub(r"-{2,}", "-", raw)
     # Tomar solo la parte CI-JDM-xxxx/yyyy
-    m2 = re.search(r'CI-JDM-[\w/]+', raw)
-    return m2.group().rstrip('.,') if m2 else raw.strip().rstrip('.,')
+    m2 = re.search(r"CI-JDM-[\w/]+", raw)
+    return m2.group().rstrip(".,") if m2 else raw.strip().rstrip(".,")
+
 
 def _limpiar_fiscal(s: str) -> str:
     """Quita el municipio/institución del final del campo FISCAL."""
     s = _limpiar(s)
     # Quitar todo desde ", CENTRO DE PROCURACIÓN..." en adelante
-    s = re.sub(r',?\s*CENTRO\s+DE\s+PROCUR[^\n]*', '', s, flags=re.I).strip()
+    s = re.sub(r",?\s*CENTRO\s+DE\s+PROCUR[^\n]*", "", s, flags=re.I).strip()
     # Quitar "JALPA DE MENDEZ, TABASCO" suelto al final
-    s = re.sub(r',?\s*JALPA\s+DE\s+MENDEZ[^\n]*', '', s, flags=re.I).strip()
+    s = re.sub(r",?\s*JALPA\s+DE\s+MENDEZ[^\n]*", "", s, flags=re.I).strip()
     # Quitar asteriscos residuales y comas finales
-    return s.strip().rstrip('.,*')
+    return s.strip().rstrip(".,*")
+
 
 def _primera_linea_no_vacia(val: str) -> str:
     """Devuelve la primera línea no vacía de un bloque multilínea."""
@@ -1109,25 +1574,26 @@ def _primera_linea_no_vacia(val: str) -> str:
             return ln
     return val.strip()
 
+
 def _extraer_fecha_hora(t: str) -> tuple:
     """
     Extrae fecha y hora de cualquiera de los 8 formatos.
     Retorna (fecha_iso: str, hora_str: str)
     """
     fecha = ""
-    hora  = ""
+    hora = ""
 
     # ── HORA primero (antes de modificar t) ─────────────────
     patrones_hora = [
-        r"\((\d{1,2}:\d{2})\)\s*HORAS?",            # (15:00) HORAS  — Formato A
-        r"A\s+LAS\s+(\d{1,2}:\d{2})\s*HRS?",        # A LAS 09:00 HRS — Formato C
+        r"\((\d{1,2}:\d{2})\)\s*HORAS?",  # (15:00) HORAS  — Formato A
+        r"A\s+LAS\s+(\d{1,2}:\d{2})\s*HRS?",  # A LAS 09:00 HRS — Formato C
         r"(?:^|\n)\s*HORA\s*[:\*]+\s*[*\s]*(\d{1,2}:\d{2})",  # HORA: *8:30  — Formato B
         r"INICIO\s*[:\*\s]+(\d{1,2}:\d{2})\s*(?:HRS?|HORAS?)?",  # INICIO: 13:30
         r"COMENZ[OÓ]\s+A\s+LAS\s+(\d{1,2}:\d{2})",  # COMENZO A LAS 11:30 — Formato E
         r"(?:^|\n)\s*(\d{1,2}[;:]\d{2})\s*(?:A\.M|P\.M|AM|PM)",  # 08;00.A.M  — Formato H
         r"(?:^|\n)\s*(\d{1,2}:\d{2})\s*(?:A\.M|P\.M|AM|PM|HRS?|HORAS?)",  # 14:00.P.M — Formato D
-        r"(\d{1,2}:\d{2})\s*(?:HRS?|HORAS?)",        # 8:00 HRS genérico
-        r"(?:^|\n)(\d{1,2}:\d{2})\s*$",              # hora sola en línea
+        r"(\d{1,2}:\d{2})\s*(?:HRS?|HORAS?)",  # 8:00 HRS genérico
+        r"(?:^|\n)(\d{1,2}:\d{2})\s*$",  # hora sola en línea
     ]
     for pat in patrones_hora:
         m = re.search(pat, t, re.I | re.MULTILINE)
@@ -1141,21 +1607,27 @@ def _extraer_fecha_hora(t: str) -> tuple:
     # FORMATO A: "REPORTE DE AUDIENCIA .* 26 DE febrero 2026"
     m = re.search(
         r"REPORTE\s+DE\s+AUDIENCIA[^*\n]{0,40}?(\d{1,2})\s+[Dd][Ee]\s+(\w+)\s+(\d{4})",
-        t, re.I)
+        t,
+        re.I,
+    )
     if m:
         dia, mes_s, anio = m.group(1), m.group(2).lower(), m.group(3)
         mn = MESES_NUM.get(mes_s, 0)
-        if mn: fecha = f"{anio}-{mn:02d}-{int(dia):02d}"
+        if mn:
+            fecha = f"{anio}-{mn:02d}-{int(dia):02d}"
 
     # FORMATO C: "FECHA Y HORA: 26 DE FEBRERO DE 2026"
     if not fecha:
         m = re.search(
             r"FECHA\s+Y\s+HORA\s*:\s*(\d{1,2})\s+[Dd][Ee]\s+(\w+)\s+[Dd][Ee]\s+(\d{4})",
-            t, re.I)
+            t,
+            re.I,
+        )
         if m:
             dia, mes_s, anio = m.group(1), m.group(2).lower(), m.group(3)
             mn = MESES_NUM.get(mes_s, 0)
-            if mn: fecha = f"{anio}-{mn:02d}-{int(dia):02d}"
+            if mn:
+                fecha = f"{anio}-{mn:02d}-{int(dia):02d}"
 
     # FORMATO D/H: varias líneas "DEL 25 DE FEBRERO DEL 2026"
     #             o "23 de febrero del 2026" o "25 DE FEBRERO DEL 2026"
@@ -1179,8 +1651,10 @@ def _extraer_fecha_hora(t: str) -> tuple:
         if m:
             dia, mes_raw, anio = m.group(1), m.group(2), m.group(3)
             mn = MESES_NUM.get(mes_raw.lower(), 0)
-            if not mn and mes_raw.isdigit(): mn = int(mes_raw)
-            if mn: fecha = f"{anio}-{mn:02d}-{int(dia):02d}"
+            if not mn and mes_raw.isdigit():
+                mn = int(mes_raw)
+            if mn:
+                fecha = f"{anio}-{mn:02d}-{int(dia):02d}"
 
     # FORMATO F: "23/02/2026" o "24 DE FEBRERO 2026" (sin "DE" antes de año)
     if not fecha:
@@ -1204,7 +1678,8 @@ def _extraer_fecha_hora(t: str) -> tuple:
             mn = MESES_NUM.get(mes_s, 0)
             if mn:
                 fecha = f"{anio}-{mn:02d}-{int(dia):02d}"
-                if not hora: hora = m.group(4) + ":00"
+                if not hora:
+                    hora = m.group(4) + ":00"
 
     # FORMATO genérico: "DD DE MES YYYY" (sin DE antes del año)
     if not fecha:
@@ -1212,10 +1687,10 @@ def _extraer_fecha_hora(t: str) -> tuple:
         if m:
             dia, mes_s, anio = m.group(1), m.group(2).lower(), m.group(3)
             mn = MESES_NUM.get(mes_s, 0)
-            if mn: fecha = f"{anio}-{mn:02d}-{int(dia):02d}"
+            if mn:
+                fecha = f"{anio}-{mn:02d}-{int(dia):02d}"
 
     return fecha, hora
-
 
 
 def parsear_reporte_audiencia(texto: str) -> Dict[str, Any]:
@@ -1231,16 +1706,18 @@ def parsear_reporte_audiencia(texto: str) -> Dict[str, Any]:
     """
     # ── PRE-PROCESO ─────────────────────────────────────────────
     # Quitar asteriscos de WhatsApp (bold/italic), normalizar espacios
-    t = re.sub(r'\*+', ' ', texto)
-    t = re.sub(r'[ \t]{2,}', ' ', t)
+    t = re.sub(r"\*+", " ", texto)
+    t = re.sub(r"[ \t]{2,}", " ", t)
     # Normalizar punto-y-coma en horas (08;00 → 08:00)
-    t = re.sub(r'(\d{1,2});(\d{2})', r'\1:\2', t)
+    t = re.sub(r"(\d{1,2});(\d{2})", r"\1:\2", t)
     result: Dict[str, Any] = {}
 
     # ── FECHA y HORA ─────────────────────────────────────────────
     fecha, hora = _extraer_fecha_hora(t)
-    if fecha: result["FECHA "] = fecha   # con espacio para coincidir con columna Excel
-    if hora:  result["HORA"]   = hora
+    if fecha:
+        result["FECHA "] = fecha  # con espacio para coincidir con columna Excel
+    if hora:
+        result["HORA"] = hora
 
     # ── CARPETA DE INVESTIGACIÓN ─────────────────────────────────
     carpeta_pats = [
@@ -1258,7 +1735,7 @@ def parsear_reporte_audiencia(texto: str) -> Dict[str, Any]:
     for pat in carpeta_pats:
         m = re.search(pat, t, re.I | re.MULTILINE)
         if m:
-            raw = m.group(1).strip().split('\n')[0]
+            raw = m.group(1).strip().split("\n")[0]
             result["CARPETA DE INV."] = _normalizar_carpeta(raw)
             break
 
@@ -1299,7 +1776,8 @@ def parsear_reporte_audiencia(texto: str) -> Dict[str, Any]:
                 result["VICTIMAS (S)"] = val
             elif not val:
                 continue
-            if result.get("VICTIMAS (S)"): break
+            if result.get("VICTIMAS (S)"):
+                break
     # Fallback: "VÍCTIMA:" con valor en línea siguiente
     if not result.get("VICTIMAS (S)"):
         m = re.search(r"V[IÍ]CTIMA[^:\n]{0,20}:\s*\n\s*(.+?)(?=\n|\Z)", t, re.I)
@@ -1349,9 +1827,9 @@ def parsear_reporte_audiencia(texto: str) -> Dict[str, Any]:
     for pat in tipo_pats:
         m = re.search(pat, t, re.I | re.MULTILINE)
         if m:
-            raw = _limpiar(m.group(1)).rstrip('.,')
+            raw = _limpiar(m.group(1)).rstrip(".,")
             # Descartar si contiene año (sería fecha, no tipo)
-            if re.search(r'\b20\d\d\b', raw):
+            if re.search(r"\b20\d\d\b", raw):
                 continue
             # Descartar si es muy corto o inútil
             if len(raw) < 3:
@@ -1380,10 +1858,12 @@ def parsear_reporte_audiencia(texto: str) -> Dict[str, Any]:
         if m:
             val = _limpiar(m.group(1))
             # Quitar institución al final del texto
-            val = re.sub(r',?\s*CENTRO\s+DE\s+PROCUR[^\n]*', '', val, flags=re.I).strip()
-            val = re.sub(r',?\s*JALPA\s+DE\s+MENDEZ[^\n]*', '', val, flags=re.I).strip()
-            val = re.sub(r'\s*Es\s+cuanto\.?\s*$', '', val, flags=re.I).strip()
-            val = val.rstrip('.,')
+            val = re.sub(
+                r",?\s*CENTRO\s+DE\s+PROCUR[^\n]*", "", val, flags=re.I
+            ).strip()
+            val = re.sub(r",?\s*JALPA\s+DE\s+MENDEZ[^\n]*", "", val, flags=re.I).strip()
+            val = re.sub(r"\s*Es\s+cuanto\.?\s*$", "", val, flags=re.I).strip()
+            val = val.rstrip(".,")
             if len(val) > 10:
                 result["RESOLUCION"] = val[:1000]
                 break
@@ -1419,7 +1899,7 @@ def parsear_reporte_audiencia(texto: str) -> Dict[str, Any]:
     for pat in juez_pats:
         m = re.search(pat, t, re.I | re.MULTILINE)
         if m:
-            val = _limpiar(m.group(1)).rstrip('.,')
+            val = _limpiar(m.group(1)).rstrip(".,")
             if val and len(val) > 2:
                 result["JUEZ"] = val
                 break
@@ -1455,17 +1935,24 @@ def parsear_reporte_audiencia(texto: str) -> Dict[str, Any]:
         if m:
             val = _limpiar(m.group(1))
             val = _primera_linea_no_vacia(val)
-            if val and len(val) > 3 and val.upper() not in ("PUBLICO","PARTICULAR","NO APLICA","GRATUITA"):
+            if (
+                val
+                and len(val) > 3
+                and val.upper()
+                not in ("PUBLICO", "PARTICULAR", "NO APLICA", "GRATUITA")
+            ):
                 result["ASESOR JURÍDICO"] = val
                 break
 
     return result
 
+
 class AudienciaRequest(BaseModel):
     texto_reporte: str
-    numero: Optional[int] = None          # número de fila (auto si None)
+    numero: Optional[int] = None  # número de fila (auto si None)
     template_name: str = "CPJ-JDM-RESULTADOS_AUDIENCIA_PLANTILLA.xlsx"
     output_filename: str = "RESULTADOS_AUDIENCIA_ACTUALIZADO"
+
 
 class AudienciaParseRequest(BaseModel):
     texto_reporte: str
@@ -1475,8 +1962,21 @@ class AudienciaParseRequest(BaseModel):
 async def parse_audiencia_endpoint(req: AudienciaParseRequest):
     """Analiza texto de reporte de audiencia y devuelve campos estructurados."""
     campos = parsear_reporte_audiencia(req.texto_reporte)
-    pendientes = [f for f in ["FECHA","CARPETA DE INV.","CAUSA PENAL","VICTIMAS (S)","DELITO","IMPUTADOS (S)","TIPO DE AUDIENCIA","RESOLUCION","FISCAL"]
-                  if not campos.get(f)]
+    pendientes = [
+        f
+        for f in [
+            "FECHA",
+            "CARPETA DE INV.",
+            "CAUSA PENAL",
+            "VICTIMAS (S)",
+            "DELITO",
+            "IMPUTADOS (S)",
+            "TIPO DE AUDIENCIA",
+            "RESOLUCION",
+            "FISCAL",
+        ]
+        if not campos.get(f)
+    ]
     return {
         "campos_detectados": campos,
         "total_detectados": len([v for v in campos.values() if v]),
@@ -1492,21 +1992,25 @@ async def audiencia_to_excel(req: AudienciaRequest):
     """
     tpl_path = safe_path(req.template_name, TPLS_DIR)
     if not os.path.exists(tpl_path):
-        raise HTTPException(404, f"Plantilla '{req.template_name}' no encontrada en /plantillas.\n"
-                                 f"Sube el archivo CPJ-JDM-RESULTADOS_AUDIENCIA_PLANTILLA.xlsx primero.")
+        raise HTTPException(
+            404,
+            f"Plantilla '{req.template_name}' no encontrada en /plantillas.\n"
+            f"Sube el archivo CPJ-JDM-RESULTADOS_AUDIENCIA_PLANTILLA.xlsx primero.",
+        )
 
     campos = parsear_reporte_audiencia(req.texto_reporte)
 
     try:
         import openpyxl
         from datetime import datetime, time as dtime
+
         wb = openpyxl.load_workbook(tpl_path)
         ws = wb.active
 
         # Encontrar fila de encabezados (fila con "NÚM")
         header_row = 9  # default conocido
         for i, row in enumerate(ws.iter_rows(values_only=True), 1):
-            if any(str(v).strip().upper() in ("NÚM","NUM") for v in row if v):
+            if any(str(v).strip().upper() in ("NÚM", "NUM") for v in row if v):
                 header_row = i
                 break
 
@@ -1524,7 +2028,8 @@ async def audiencia_to_excel(req: AudienciaRequest):
             # Contar filas de datos existentes
             count = 0
             for row in ws.iter_rows(min_row=header_row + 1, values_only=True):
-                if any(v for v in row): count += 1
+                if any(v for v in row):
+                    count += 1
             num = count + 1
 
         # Fila de referencia para estilos
@@ -1532,18 +2037,18 @@ async def audiencia_to_excel(req: AudienciaRequest):
 
         # Mapeo exacto de campos → columnas
         col_map = {
-            "NUM":             1,   # A
-            "FECHA":           2,   # B
-            "HORA":            3,   # C
-            "CARPETA DE INV.": 4,   # D
-            "CAUSA PENAL":     5,   # E
-            "MUNICIPIO":       6,   # F
-            "VICTIMAS (S)":    7,   # G
-            "DELITO":          8,   # H
-            "IMPUTADOS (S)":   9,   # I
-            "TIPO DE AUDIENCIA":10, # J
-            "RESOLUCION":      11,  # K
-            "FISCAL":          12,  # L
+            "NUM": 1,  # A
+            "FECHA": 2,  # B
+            "HORA": 3,  # C
+            "CARPETA DE INV.": 4,  # D
+            "CAUSA PENAL": 5,  # E
+            "MUNICIPIO": 6,  # F
+            "VICTIMAS (S)": 7,  # G
+            "DELITO": 8,  # H
+            "IMPUTADOS (S)": 9,  # I
+            "TIPO DE AUDIENCIA": 10,  # J
+            "RESOLUCION": 11,  # K
+            "FISCAL": 12,  # L
         }
 
         for field, col_idx in col_map.items():
@@ -1553,32 +2058,41 @@ async def audiencia_to_excel(req: AudienciaRequest):
             if field == "NUM":
                 dst_cell.value = num
             elif field == "FECHA":
-                fecha_str = campos.get("FECHA","")
+                fecha_str = campos.get("FECHA", "")
                 if fecha_str:
                     try:
                         dst_cell.value = datetime.strptime(fecha_str, "%Y-%m-%d")
                         dst_cell.number_format = "DD/MM/YYYY"
-                    except: dst_cell.value = fecha_str
+                    except:
+                        dst_cell.value = fecha_str
             elif field == "HORA":
-                hora_str = campos.get("HORA","")
+                hora_str = campos.get("HORA", "")
                 if hora_str:
                     try:
                         parts = hora_str.split(":")
                         dst_cell.value = dtime(int(parts[0]), int(parts[1]))
                         dst_cell.number_format = "HH:MM"
-                    except: dst_cell.value = hora_str
+                    except:
+                        dst_cell.value = hora_str
             else:
                 dst_cell.value = campos.get(field, "")
 
             copy_cell_style(src_cell, dst_cell)
 
-        out = os.path.join(TEMP_DIR, f"{req.output_filename}_{uuid.uuid4().hex[:8]}.xlsx")
+        out = os.path.join(
+            TEMP_DIR, f"{req.output_filename}_{uuid.uuid4().hex[:8]}.xlsx"
+        )
         wb.save(out)
-        return FileResponse(out, filename=f"{req.output_filename}.xlsx",
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        return FileResponse(
+            out,
+            filename=f"{req.output_filename}.xlsx",
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
 
-    except HTTPException: raise
-    except Exception as e: raise HTTPException(500, str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
 
 
 # ─────────────────────────────────────────────────────
@@ -1586,6 +2100,7 @@ async def audiencia_to_excel(req: AudienciaRequest):
 # ─────────────────────────────────────────────────────
 from docx.shared import Pt, RGBColor, Inches
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+
 
 def parsear_pdf_audiencia(texto_pdf: str) -> Dict[str, str]:
     """
@@ -1605,7 +2120,8 @@ def parsear_pdf_audiencia(texto_pdf: str) -> Dict[str, str]:
         m = re.search(pat, t, re.I)
         if m:
             mun = m.group(1).strip()
-            if "jalpa" in mun.lower(): mun = "Jalpa de Méndez"
+            if "jalpa" in mun.lower():
+                mun = "Jalpa de Méndez"
             result["MUNICIPIO"] = mun
             break
     if "MUNICIPIO" not in result:
@@ -1614,13 +2130,20 @@ def parsear_pdf_audiencia(texto_pdf: str) -> Dict[str, str]:
     # FECHA y HORA
     m = re.search(
         r"(\d{1,2})\s+de\s+(\w+)\s+(?:del?\s+)?(\d{4}).*?(\d{1,2}:\d{2})",
-        t, re.I | re.DOTALL)
+        t,
+        re.I | re.DOTALL,
+    )
     if m:
-        dia, mes_str, anio, hora = m.group(1), m.group(2).lower(), m.group(3), m.group(4)
+        dia, mes_str, anio, hora = (
+            m.group(1),
+            m.group(2).lower(),
+            m.group(3),
+            m.group(4),
+        )
         mes_num = MESES.get(mes_str, 0)
         if mes_num:
             result["FECHA"] = f"{dia} de {m.group(2)} de {anio}"
-            result["HORA"]  = hora
+            result["HORA"] = hora
     else:
         # Buscar fecha sola
         m = re.search(r"(\d{1,2})\s+de\s+(\w+)\s+(?:del?\s+)?(\d{4})", t, re.I)
@@ -1649,7 +2172,7 @@ def parsear_pdf_audiencia(texto_pdf: str) -> Dict[str, str]:
     if "CARPETA ADMINISTRATIVA" not in result:
         # Buscar segundo número de causa (distinto al de carpeta)
         nums = re.findall(r"(\d{2,4}/\d{4})", t)
-        carpeta_num = re.search(r"\d+(?=/\d{4})", result.get("NÚM DE CARPETA","")) 
+        carpeta_num = re.search(r"\d+(?=/\d{4})", result.get("NÚM DE CARPETA", ""))
         for n in nums:
             if carpeta_num and n != carpeta_num.group():
                 result["CARPETA ADMINISTRATIVA"] = n
@@ -1657,21 +2180,21 @@ def parsear_pdf_audiencia(texto_pdf: str) -> Dict[str, str]:
 
     # TIPO DE AUDIENCIA
     tipos = {
-        "inicial":"Audiencia Inicial",
-        "audiencia inicial":"Audiencia Inicial",
-        "intermedia":"Audiencia Intermedia",
-        "audiencia intermedia":"Audiencia Intermedia",
-        "juicio oral":"Juicio Oral",
-        "juicio":"Juicio Oral",
-        "continuación":"Juicio en continuación",
-        "cont. juicio":"Juicio en continuación",
-        "abreviado":"Procedimiento Abreviado",
-        "procedimiento abreviado":"Procedimiento Abreviado",
-        "suspensión condicional":"Suspensión Condicional del Proceso",
-        "suspension":"Suspensión Condicional del Proceso",
-        "revision":"Revisión de Medidas Cautelares",
-        "cateo":"Orden de Cateo",
-        "vinculacion":"Audiencia Inicial",
+        "inicial": "Audiencia Inicial",
+        "audiencia inicial": "Audiencia Inicial",
+        "intermedia": "Audiencia Intermedia",
+        "audiencia intermedia": "Audiencia Intermedia",
+        "juicio oral": "Juicio Oral",
+        "juicio": "Juicio Oral",
+        "continuación": "Juicio en continuación",
+        "cont. juicio": "Juicio en continuación",
+        "abreviado": "Procedimiento Abreviado",
+        "procedimiento abreviado": "Procedimiento Abreviado",
+        "suspensión condicional": "Suspensión Condicional del Proceso",
+        "suspension": "Suspensión Condicional del Proceso",
+        "revision": "Revisión de Medidas Cautelares",
+        "cateo": "Orden de Cateo",
+        "vinculacion": "Audiencia Inicial",
     }
     for k, v in tipos.items():
         if k in t.lower():
@@ -1774,8 +2297,8 @@ def generar_word_reporte_audiencia(campos: Dict[str, str]) -> str:
     doc = Document()
 
     # ── Estilos globales
-    style = doc.styles['Normal']
-    style.font.name = 'Arial'
+    style = doc.styles["Normal"]
+    style.font.name = "Arial"
     style.font.size = Pt(11)
 
     # ── ENCABEZADO
@@ -1801,8 +2324,8 @@ def generar_word_reporte_audiencia(campos: Dict[str, str]) -> str:
     doc.add_paragraph()
 
     # ── FECHA Y HORA
-    fecha_str = campos.get('FECHA','[día, mes, año]')
-    hora_str  = campos.get('HORA','[hora]')
+    fecha_str = campos.get("FECHA", "[día, mes, año]")
+    hora_str = campos.get("HORA", "[hora]")
     fh = doc.add_paragraph()
     fh.add_run("FECHA Y HORA: ").bold = True
     fh.add_run(f"{fecha_str}, a las {hora_str} horas.-")
@@ -1811,20 +2334,28 @@ def generar_word_reporte_audiencia(campos: Dict[str, str]) -> str:
 
     # ── CAMPOS DEL REPORTE
     campos_formato = [
-        ("Nº DE CARPETA",          "NÚM DE CARPETA",         "[Número de carpeta de investigación]"),
-        ("CARPETA ADMINISTRATIVA",  "CARPETA ADMINISTRATIVA",  "[Número de carpeta administrativa]"),
-        ("TIPO DE AUDIENCIA",       "TIPO DE AUDIENCIA",       "[Inicial / Intermedia / Juicio Oral / Otra]"),
-        ("VÍCTIMA U OFENDIDO",      "VÍCTIMA U OFENDIDO",      "[Nombre completo o iniciales]"),
-        ("ASESOR JURÍDICO",         "ASESOR JURÍDICO",         "[Nombre del asesor jurídico]"),
-        ("IMPUTADO",                "IMPUTADO",                "[Nombre del imputado]"),
-        ("DEFENSOR PARTICULAR / PÚBLICO", "DEFENSOR",          "[Nombre del defensor]"),
-        ("DELITO",                  "DELITO",                  "[Delito imputado]"),
-        ("FISCAL QUE INTERVIENE",   "FISCAL QUE INTERVIENE",   "[Nombre del Fiscal]"),
-        ("JUEZ DE CONTROL",         "JUEZ DE CONTROL",         "[Nombre del Juez de Control y región]"),
+        ("Nº DE CARPETA", "NÚM DE CARPETA", "[Número de carpeta de investigación]"),
+        (
+            "CARPETA ADMINISTRATIVA",
+            "CARPETA ADMINISTRATIVA",
+            "[Número de carpeta administrativa]",
+        ),
+        (
+            "TIPO DE AUDIENCIA",
+            "TIPO DE AUDIENCIA",
+            "[Inicial / Intermedia / Juicio Oral / Otra]",
+        ),
+        ("VÍCTIMA U OFENDIDO", "VÍCTIMA U OFENDIDO", "[Nombre completo o iniciales]"),
+        ("ASESOR JURÍDICO", "ASESOR JURÍDICO", "[Nombre del asesor jurídico]"),
+        ("IMPUTADO", "IMPUTADO", "[Nombre del imputado]"),
+        ("DEFENSOR PARTICULAR / PÚBLICO", "DEFENSOR", "[Nombre del defensor]"),
+        ("DELITO", "DELITO", "[Delito imputado]"),
+        ("FISCAL QUE INTERVIENE", "FISCAL QUE INTERVIENE", "[Nombre del Fiscal]"),
+        ("JUEZ DE CONTROL", "JUEZ DE CONTROL", "[Nombre del Juez de Control y región]"),
     ]
 
     for label, key, placeholder in campos_formato:
-        p = doc.add_paragraph(style='Normal')
+        p = doc.add_paragraph(style="Normal")
         p.paragraph_format.space_after = Pt(4)
         run_label = p.add_run(f"- {label}: ")
         run_label.bold = True
@@ -1840,8 +2371,11 @@ def generar_word_reporte_audiencia(campos: Dict[str, str]) -> str:
     obs_title.add_run("OBSERVACIONES:").bold = True
 
     obs_text = campos.get("OBSERVACIONES", "")
-    obs_p = doc.add_paragraph(obs_text if obs_text else
-        "[Espacio para anotar resoluciones, acuerdos, incidencias o notas relevantes]")
+    obs_p = doc.add_paragraph(
+        obs_text
+        if obs_text
+        else "[Espacio para anotar resoluciones, acuerdos, incidencias o notas relevantes]"
+    )
     if not obs_text:
         obs_p.runs[0].font.color.rgb = RGBColor(0xAA, 0xAA, 0xAA)
 
@@ -1894,12 +2428,21 @@ async def parse_pdf_audiencia(file: UploadFile = File(...)):
         with pdfplumber.open(tmp) as pdf:
             for page in pdf.pages:
                 t = page.extract_text()
-                if t: texto += t + "\n"
+                if t:
+                    texto += t + "\n"
         campos = parsear_pdf_audiencia(texto)
-        pendientes = [k for k in [
-            "NÚM DE CARPETA","TIPO DE AUDIENCIA","VÍCTIMA U OFENDIDO",
-            "IMPUTADO","DELITO","FISCAL QUE INTERVIENE"
-        ] if not campos.get(k)]
+        pendientes = [
+            k
+            for k in [
+                "NÚM DE CARPETA",
+                "TIPO DE AUDIENCIA",
+                "VÍCTIMA U OFENDIDO",
+                "IMPUTADO",
+                "DELITO",
+                "FISCAL QUE INTERVIENE",
+            ]
+            if not campos.get(k)
+        ]
         return {
             "texto_extraido": texto[:1000],
             "campos_detectados": campos,
@@ -1909,7 +2452,8 @@ async def parse_pdf_audiencia(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(500, str(e))
     finally:
-        if os.path.exists(tmp): os.remove(tmp)
+        if os.path.exists(tmp):
+            os.remove(tmp)
 
 
 @app.post("/api/audiencia/generar-reporte")
@@ -1919,27 +2463,27 @@ async def generar_reporte_audiencia(req: PDFAudienciaRequest):
     Se puede llamar con datos ya extraídos del PDF o con texto manual.
     """
     campos = {
-        "MUNICIPIO":          req.municipio or "Jalpa de Méndez",
-        "FECHA":              req.fecha or "",
-        "HORA":               req.hora or "",
-        "NÚM DE CARPETA":     req.nuc or "",
+        "MUNICIPIO": req.municipio or "Jalpa de Méndez",
+        "FECHA": req.fecha or "",
+        "HORA": req.hora or "",
+        "NÚM DE CARPETA": req.nuc or "",
         "CARPETA ADMINISTRATIVA": req.causa or "",
-        "TIPO DE AUDIENCIA":  req.tipo_audiencia or "",
+        "TIPO DE AUDIENCIA": req.tipo_audiencia or "",
         "VÍCTIMA U OFENDIDO": req.victima or "",
-        "ASESOR JURÍDICO":    req.asesor or "",
-        "IMPUTADO":           req.imputado or "",
-        "DEFENSOR":           req.defensor or "",
-        "DELITO":             req.delito or "",
+        "ASESOR JURÍDICO": req.asesor or "",
+        "IMPUTADO": req.imputado or "",
+        "DEFENSOR": req.defensor or "",
+        "DELITO": req.delito or "",
         "FISCAL QUE INTERVIENE": req.fiscal or "",
-        "JUEZ DE CONTROL":    req.juez or "",
-        "OBSERVACIONES":      req.observaciones or "",
+        "JUEZ DE CONTROL": req.juez or "",
+        "OBSERVACIONES": req.observaciones or "",
     }
     try:
         out_path = generar_word_reporte_audiencia(campos)
         return FileResponse(
             out_path,
             filename=f"{req.output_filename}.docx",
-            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         )
     except Exception as e:
         raise HTTPException(500, str(e))
@@ -1949,7 +2493,7 @@ async def generar_reporte_audiencia(req: PDFAudienciaRequest):
 async def pdf_to_reporte_directo(
     file: UploadFile = File(...),
     output_filename: str = "REPORTE_AUDIENCIA",
-    municipio: str = "Jalpa de Méndez"
+    municipio: str = "Jalpa de Méndez",
 ):
     """
     Todo en uno: sube PDF → extrae → genera Word del reporte de audiencias.
@@ -1964,19 +2508,22 @@ async def pdf_to_reporte_directo(
         with pdfplumber.open(tmp) as pdf:
             for page in pdf.pages:
                 t = page.extract_text()
-                if t: texto += t + "\n"
+                if t:
+                    texto += t + "\n"
         campos = parsear_pdf_audiencia(texto)
-        if municipio: campos["MUNICIPIO"] = municipio
+        if municipio:
+            campos["MUNICIPIO"] = municipio
         out_path = generar_word_reporte_audiencia(campos)
         return FileResponse(
             out_path,
             filename=f"{output_filename}.docx",
-            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         )
     except Exception as e:
         raise HTTPException(500, str(e))
     finally:
-        if os.path.exists(tmp): os.remove(tmp)
+        if os.path.exists(tmp):
+            os.remove(tmp)
 
 
 # ─────────────────────────────────────────────────────
@@ -1987,37 +2534,72 @@ TABLERO_PATH = os.path.join(TPLS_DIR, "TABLERO_GENERAL.xlsx")
 # Estructura de cada hoja del Tablero
 TABLERO_SHEETS = {
     "Inicios de Carpetas": [
-        "NUC","FOLIO_NUC","FECHA DE INICIOS","AÑO","MES",
-        "VICEFISCALÍA","FISCALÍA O AGENCIA",
-        "DELITO PRINCIPAL","DELITO FINAL","CALIFICATIVO DEL DELITO",
-        "CONSUMACIÓN DEL DELITO","¿DETENIDO?",
-        "VICTIMA ","SEXO VICTIMA","EDAD VICTIMA","NACIONALIDAD VICTIMA",
-        "IMPUTADO ","SEXO IMPUTADO","EDAD IMPUTADO","NACIONALIDAD IMPUTADO",
-        "ALIAS","MUNICIPIO","FISCAL INICIAL",
-        "NARRATIVA DE LOS HECHOS","TESTIGOS","OBSERVACIONES",
-        "INFORMACIÓN CORRECTA"
+        "NUC",
+        "FOLIO_NUC",
+        "FECHA DE INICIOS",
+        "AÑO",
+        "MES",
+        "VICEFISCALÍA",
+        "FISCALÍA O AGENCIA",
+        "DELITO PRINCIPAL",
+        "DELITO FINAL",
+        "CALIFICATIVO DEL DELITO",
+        "CONSUMACIÓN DEL DELITO",
+        "¿DETENIDO?",
+        "VICTIMA ",
+        "SEXO VICTIMA",
+        "EDAD VICTIMA",
+        "NACIONALIDAD VICTIMA",
+        "IMPUTADO ",
+        "SEXO IMPUTADO",
+        "EDAD IMPUTADO",
+        "NACIONALIDAD IMPUTADO",
+        "ALIAS",
+        "MUNICIPIO",
+        "FISCAL INICIAL",
+        "NARRATIVA DE LOS HECHOS",
+        "TESTIGOS",
+        "OBSERVACIONES",
+        "INFORMACIÓN CORRECTA",
     ],
     "Audiencias": [
-        "NÚM","FECHA","HORA","CARPETA DE INV.","CAUSA PENAL",
-        "MUNICIPIO","VICTIMAS (S)","DELITO","IMPUTADOS (S)",
-        "TIPO DE AUDIENCIA","RESOLUCION","FISCAL"
+        "NÚM",
+        "FECHA",
+        "HORA",
+        "CARPETA DE INV.",
+        "CAUSA PENAL",
+        "MUNICIPIO",
+        "VICTIMAS (S)",
+        "DELITO",
+        "IMPUTADOS (S)",
+        "TIPO DE AUDIENCIA",
+        "RESOLUCION",
+        "FISCAL",
     ],
     "Novedades": [
-        "Desglose de delitos","Detenido","Con Violencia/sin violencia",
-        "Tipo de violencia","Nombre de la victima","Nombre del Imputado",
-        "Medidas de proteccion","Municipio","Detalles relevantes"
+        "Desglose de delitos",
+        "Detenido",
+        "Con Violencia/sin violencia",
+        "Tipo de violencia",
+        "Nombre de la victima",
+        "Nombre del Imputado",
+        "Medidas de proteccion",
+        "Municipio",
+        "Detalles relevantes",
     ],
 }
+
 
 def _crear_tablero_vacio() -> None:
     """Crea el TABLERO_GENERAL.xlsx si no existe, con todas las hojas y encabezados."""
     import openpyxl
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
     wb = openpyxl.Workbook()
     wb.remove(wb.active)  # quitar hoja default
 
-    header_font  = Font(bold=True, color="FFFFFF", size=10)
-    header_fill  = PatternFill("solid", fgColor="003366")
+    header_font = Font(bold=True, color="FFFFFF", size=10)
+    header_fill = PatternFill("solid", fgColor="003366")
     header_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
     thin = Side(style="thin", color="AAAAAA")
     header_border = Border(left=thin, right=thin, bottom=thin)
@@ -2027,8 +2609,8 @@ def _crear_tablero_vacio() -> None:
         # Fila de encabezado en fila 1
         for col_idx, col_name in enumerate(columns, 1):
             cell = ws.cell(row=1, column=col_idx, value=col_name)
-            cell.font   = header_font
-            cell.fill   = header_fill
+            cell.font = header_font
+            cell.fill = header_fill
             cell.alignment = header_align
             cell.border = header_border
             ws.column_dimensions[cell.column_letter].width = max(14, len(col_name) + 2)
@@ -2051,6 +2633,7 @@ def _crear_tablero_vacio() -> None:
 
     wb.save(TABLERO_PATH)
 
+
 def _get_last_data_row(ws) -> int:
     """Devuelve el número de la última fila con datos (después del encabezado)."""
     last = 1
@@ -2058,6 +2641,7 @@ def _get_last_data_row(ws) -> int:
         if any(c.value for c in row):
             last = row[0].row
     return last
+
 
 def _row_key(row_dict: dict, sheet_name: str) -> str:
     """Genera una clave única por registro para detectar duplicados."""
@@ -2069,21 +2653,20 @@ def _row_key(row_dict: dict, sheet_name: str) -> str:
         return f"{row_dict.get('Nombre de la victima','')}-{row_dict.get('Desglose de delitos','')}"
     return str(row_dict)
 
+
 def _get_existing_keys(ws, columns: list, sheet_name: str) -> set:
     """Lee todas las filas existentes y devuelve sus claves únicas."""
     keys = set()
     for row in ws.iter_rows(min_row=2, values_only=True):
-        if not any(row): continue
+        if not any(row):
+            continue
         d = dict(zip(columns, row))
         keys.add(_row_key(d, sheet_name))
     return keys
 
+
 def _actualizar_tablero_hoja(
-    ws_tablero,
-    ws_fuente,
-    sheet_name: str,
-    columns: list,
-    dry_run: bool = False
+    ws_tablero, ws_fuente, sheet_name: str, columns: list, dry_run: bool = False
 ) -> dict:
     """
     Copia filas nuevas (no duplicadas) de ws_fuente al ws_tablero.
@@ -2105,7 +2688,8 @@ def _actualizar_tablero_hoja(
     skipped = 0
 
     for row in ws_fuente.iter_rows(min_row=2, values_only=True):
-        if not any(row): continue
+        if not any(row):
+            continue
         # Mapear por nombre de columna
         row_dict = {}
         for col_name, val in zip(source_headers, row):
@@ -2130,6 +2714,7 @@ def _actualizar_tablero_hoja(
 
     return {"added": added, "skipped": skipped}
 
+
 @app.get("/api/tablero/info")
 async def tablero_info():
     """Devuelve metadatos del Tablero General."""
@@ -2150,8 +2735,13 @@ async def tablero_info():
         for sheet_name, columns in TABLERO_SHEETS.items():
             if sheet_name in wb.sheetnames:
                 ws = wb[sheet_name]
-                count = sum(1 for row in ws.iter_rows(min_row=2, values_only=True) if any(row))
-                info["sheets"][sheet_name] = {"total_registros": count, "columnas": len(columns)}
+                count = sum(
+                    1 for row in ws.iter_rows(min_row=2, values_only=True) if any(row)
+                )
+                info["sheets"][sheet_name] = {
+                    "total_registros": count,
+                    "columnas": len(columns),
+                }
 
         return info
     except Exception as e:
@@ -2163,13 +2753,17 @@ async def crear_tablero():
     """Crea o reinicia el Tablero General vacío."""
     try:
         _crear_tablero_vacio()
-        return {"status": "ok", "message": "Tablero General creado correctamente", "path": TABLERO_PATH}
+        return {
+            "status": "ok",
+            "message": "Tablero General creado correctamente",
+            "path": TABLERO_PATH,
+        }
     except Exception as e:
         raise HTTPException(500, str(e))
 
 
 class TableroUpdateRequest(BaseModel):
-    reporte_filename: str          # nombre del archivo en /plantillas
+    reporte_filename: str  # nombre del archivo en /plantillas
     incluir_audiencias: bool = True
     incluir_inicios: bool = True
     incluir_novedades: bool = False  # opcional si existe hoja Novedades en el reporte
@@ -2186,61 +2780,91 @@ async def actualizar_tablero(req: TableroUpdateRequest):
 
     reporte_path = safe_path(req.reporte_filename, TPLS_DIR)
     if not os.path.exists(reporte_path):
-        raise HTTPException(404, f"'{req.reporte_filename}' no encontrado en /plantillas")
+        raise HTTPException(
+            404, f"'{req.reporte_filename}' no encontrado en /plantillas"
+        )
 
     # Crear tablero si no existe
     if not os.path.exists(TABLERO_PATH):
         _crear_tablero_vacio()
 
     try:
-        wb_rep  = openpyxl.load_workbook(reporte_path, data_only=True)
-        wb_tab  = openpyxl.load_workbook(TABLERO_PATH)
-        stats   = {}
+        wb_rep = openpyxl.load_workbook(reporte_path, data_only=True)
+        wb_tab = openpyxl.load_workbook(TABLERO_PATH)
+        stats = {}
 
         # ── INICIOS DE CARPETAS
         if req.incluir_inicios and "Inicios de Carpetas" in wb_rep.sheetnames:
             ws_src = wb_rep["Inicios de Carpetas"]
             ws_dst = wb_tab["Inicios de Carpetas"]
             stats["Inicios de Carpetas"] = _actualizar_tablero_hoja(
-                ws_dst, ws_src, "Inicios de Carpetas",
-                TABLERO_SHEETS["Inicios de Carpetas"]
+                ws_dst,
+                ws_src,
+                "Inicios de Carpetas",
+                TABLERO_SHEETS["Inicios de Carpetas"],
             )
 
         # ── AUDIENCIAS (puede llamarse de distintas formas)
         if req.incluir_audiencias:
-            posibles = ["Audiencias","Resultados de Audiencia","AUDIENCIAS",
-                        "05 AL 09 DE MAYO DE 2025"] + [s for s in wb_rep.sheetnames]
+            posibles = [
+                "Audiencias",
+                "Resultados de Audiencia",
+                "AUDIENCIAS",
+                "05 AL 09 DE MAYO DE 2025",
+            ] + [s for s in wb_rep.sheetnames]
             for nombre in posibles:
                 if nombre in wb_rep.sheetnames:
                     ws_src = wb_rep[nombre]
                     # Verificar que tiene columnas de audiencia
-                    headers = [c.value for c in list(ws_src.iter_rows(min_row=1,max_row=1))[0] if c.value]
+                    headers = [
+                        c.value
+                        for c in list(ws_src.iter_rows(min_row=1, max_row=1))[0]
+                        if c.value
+                    ]
                     if any("CARPETA" in str(h) or "TIPO" in str(h) for h in headers):
                         # Buscar encabezado real (puede estar en fila 9)
                         for r_idx in range(1, 12):
-                            row_vals = [c.value for c in list(ws_src.iter_rows(min_row=r_idx,max_row=r_idx))[0]]
-                            if any("NÚM" in str(v) or "CARPETA" in str(v) for v in row_vals if v):
+                            row_vals = [
+                                c.value
+                                for c in list(
+                                    ws_src.iter_rows(min_row=r_idx, max_row=r_idx)
+                                )[0]
+                            ]
+                            if any(
+                                "NÚM" in str(v) or "CARPETA" in str(v)
+                                for v in row_vals
+                                if v
+                            ):
                                 # Crear subhoja temporal con solo los datos desde esa fila
                                 import openpyxl as ox2
-                                wb_tmp = ox2.Workbook(); ws_tmp = wb_tmp.active
-                                all_rows = list(ws_src.iter_rows(min_row=r_idx, values_only=True))
+
+                                wb_tmp = ox2.Workbook()
+                                ws_tmp = wb_tmp.active
+                                all_rows = list(
+                                    ws_src.iter_rows(min_row=r_idx, values_only=True)
+                                )
                                 for r_i, row in enumerate(all_rows, 1):
                                     for c_i, val in enumerate(row[:12], 1):
                                         ws_tmp.cell(row=r_i, column=c_i, value=val)
                                 ws_dst = wb_tab["Audiencias"]
                                 stats["Audiencias"] = _actualizar_tablero_hoja(
-                                    ws_dst, ws_tmp, "Audiencias", TABLERO_SHEETS["Audiencias"])
+                                    ws_dst,
+                                    ws_tmp,
+                                    "Audiencias",
+                                    TABLERO_SHEETS["Audiencias"],
+                                )
                                 break
                     break
 
         # ── NOVEDADES (si existe en el reporte)
         if req.incluir_novedades:
-            for nombre in ["Detallado_foranea","Novedades","NOVEDADES"]:
+            for nombre in ["Detallado_foranea", "Novedades", "NOVEDADES"]:
                 if nombre in wb_rep.sheetnames:
                     ws_src = wb_rep[nombre]
                     ws_dst = wb_tab["Novedades"]
                     stats["Novedades"] = _actualizar_tablero_hoja(
-                        ws_dst, ws_src, "Novedades", TABLERO_SHEETS["Novedades"])
+                        ws_dst, ws_src, "Novedades", TABLERO_SHEETS["Novedades"]
+                    )
                     break
 
         # ── Actualizar Info
@@ -2249,11 +2873,19 @@ async def actualizar_tablero(req: TableroUpdateRequest):
             ws_i = wb_tab["ℹ️ Info"]
             ws_i["B4"] = now
             ws_i["B5"] = sum(
-                1 for row in wb_tab["Inicios de Carpetas"].iter_rows(min_row=2, values_only=True) if any(row)
+                1
+                for row in wb_tab["Inicios de Carpetas"].iter_rows(
+                    min_row=2, values_only=True
+                )
+                if any(row)
             )
             if "Audiencias" in wb_tab.sheetnames:
                 ws_i["B6"] = sum(
-                    1 for row in wb_tab["Audiencias"].iter_rows(min_row=2, values_only=True) if any(row)
+                    1
+                    for row in wb_tab["Audiencias"].iter_rows(
+                        min_row=2, values_only=True
+                    )
+                    if any(row)
                 )
 
         wb_tab.save(TABLERO_PATH)
@@ -2266,8 +2898,10 @@ async def actualizar_tablero(req: TableroUpdateRequest):
             "total_registros_nuevos": total_added,
         }
 
-    except HTTPException: raise
-    except Exception as e: raise HTTPException(500, str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
 
 
 @app.get("/api/tablero/descargar")
@@ -2278,7 +2912,7 @@ async def descargar_tablero():
     return FileResponse(
         TABLERO_PATH,
         filename="TABLERO_GENERAL_NEXUS.xlsx",
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
 
 
@@ -2301,6 +2935,7 @@ async def upload_y_actualizar(
         f.write(content)
     # Actualizar tablero
     from pydantic import BaseModel as BM
+
     req = TableroUpdateRequest(
         reporte_filename=file.filename,
         incluir_audiencias=incluir_audiencias,
@@ -2314,6 +2949,7 @@ async def upload_y_actualizar(
 async def tablero_preview(sheet_name: str, limit: int = 50):
     """Devuelve las últimas filas de una hoja del Tablero para previsualización."""
     import openpyxl
+
     if not os.path.exists(TABLERO_PATH):
         raise HTTPException(404, "Tablero no existe")
     try:
@@ -2327,9 +2963,16 @@ async def tablero_preview(sheet_name: str, limit: int = 50):
             if any(row):
                 rows.append(dict(zip(headers, [str(v)[:80] if v else "" for v in row])))
         # Últimas `limit` filas
-        return {"sheet": sheet_name, "total": len(rows), "rows": rows[-limit:], "headers": headers}
-    except HTTPException: raise
-    except Exception as e: raise HTTPException(500, str(e))
+        return {
+            "sheet": sheet_name,
+            "total": len(rows),
+            "rows": rows[-limit:],
+            "headers": headers,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
 
 
 # ─────────────────────────────────────────────────────
@@ -2341,10 +2984,20 @@ TABLERO_AUD_PATH = os.path.join(TPLS_DIR, "TABLERO_AUDIENCIAS.xlsx")
 
 # Columnas exactas del formato semanal de audiencias
 AUD_COLUMNS = [
-    "NÚM","FECHA ","HORA","CARPETA DE INV.","CAUSA PENAL",
-    "MUNICIPIO","VICTIMAS (S)","DELITO","IMPUTADOS (S)",
-    "TIPO DE AUDIENCIA","RESOLUCION","FISCAL"
+    "NÚM",
+    "FECHA ",
+    "HORA",
+    "CARPETA DE INV.",
+    "CAUSA PENAL",
+    "MUNICIPIO",
+    "VICTIMAS (S)",
+    "DELITO",
+    "IMPUTADOS (S)",
+    "TIPO DE AUDIENCIA",
+    "RESOLUCION",
+    "FISCAL",
 ]
+
 
 def _crear_tablero_audiencias() -> None:
     """
@@ -2378,7 +3031,9 @@ def _crear_tablero_audiencias() -> None:
 
     # Fila 3 — Info tablero
     ws.merge_cells("A3:L3")
-    ws["A3"] = "TABLERO GENERAL DE AUDIENCIAS — NEXUS Ω  |  Registro acumulativo permanente"
+    ws["A3"] = (
+        "TABLERO GENERAL DE AUDIENCIAS — NEXUS Ω  |  Registro acumulativo permanente"
+    )
     ws["A3"].font = Font(italic=True, size=9, color="666666")
     ws["A3"].alignment = Alignment(horizontal="center")
     ws.row_dimensions[3].height = 14
@@ -2410,17 +3065,17 @@ def _crear_tablero_audiencias() -> None:
     ws.row_dimensions[8].height = 6
 
     # Fila 9 — ENCABEZADOS DE DATOS
-    header_font  = Font(bold=True, size=9, color="FFFFFF")
-    header_fill  = PatternFill("solid", fgColor="17375E")
+    header_font = Font(bold=True, size=9, color="FFFFFF")
+    header_fill = PatternFill("solid", fgColor="17375E")
     header_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
     thin = Side(style="thin", color="AAAAAA")
-    med  = Side(style="medium", color="003366")
+    med = Side(style="medium", color="003366")
 
     col_widths = [6, 12, 8, 20, 14, 16, 22, 18, 22, 20, 36, 22]
     for col_idx, (col_name, width) in enumerate(zip(AUD_COLUMNS, col_widths), 1):
         cell = ws.cell(row=9, column=col_idx, value=col_name)
-        cell.font   = header_font
-        cell.fill   = header_fill
+        cell.font = header_font
+        cell.fill = header_fill
         cell.alignment = header_align
         cell.border = Border(left=thin, right=thin, top=med, bottom=med)
         ws.column_dimensions[get_column_letter(col_idx)].width = width
@@ -2433,10 +3088,10 @@ def _crear_tablero_audiencias() -> None:
 def _aud_row_key(row_vals: tuple, headers: list) -> str:
     """Clave única para detectar duplicados en audiencias."""
     d = dict(zip(headers, row_vals))
-    carpeta = str(d.get("CARPETA DE INV.","")).strip()
-    tipo    = str(d.get("TIPO DE AUDIENCIA","")).strip()
-    fecha   = str(d.get("FECHA ","") or d.get("FECHA","")).strip()
-    fiscal  = str(d.get("FISCAL","")).strip()
+    carpeta = str(d.get("CARPETA DE INV.", "")).strip()
+    tipo = str(d.get("TIPO DE AUDIENCIA", "")).strip()
+    fecha = str(d.get("FECHA ", "") or d.get("FECHA", "")).strip()
+    fiscal = str(d.get("FISCAL", "")).strip()
     return f"{carpeta}|{tipo}|{fecha}|{fiscal}"
 
 
@@ -2444,15 +3099,18 @@ def _get_aud_existing_keys(ws_tab) -> set:
     """Lee claves existentes en el tablero de audiencias."""
     keys = set()
     for row in ws_tab.iter_rows(min_row=10, values_only=True):
-        if not any(row): continue
+        if not any(row):
+            continue
         key = _aud_row_key(row[:12], AUD_COLUMNS)
-        if key.strip("|"): keys.add(key)
+        if key.strip("|"):
+            keys.add(key)
     return keys
 
 
 @app.get("/api/tablero-aud/info")
 async def tablero_aud_info():
     import openpyxl
+
     if not os.path.exists(TABLERO_AUD_PATH):
         return {"existe": False, "total": 0, "ultima_actualizacion": "—"}
     try:
@@ -2508,22 +3166,31 @@ async def upload_y_actualizar_aud(file: UploadFile = File(...)):
             ws_candidate = wb_src[sname]
             # Buscar fila con encabezados NÚM/CARPETA
             for r_idx in range(1, 15):
-                row_vals = [c.value for c in list(ws_candidate.iter_rows(
-                    min_row=r_idx, max_row=r_idx))[0]]
-                if any(str(v).strip() in ("NÚM","NUM") for v in row_vals if v):
+                row_vals = [
+                    c.value
+                    for c in list(ws_candidate.iter_rows(min_row=r_idx, max_row=r_idx))[
+                        0
+                    ]
+                ]
+                if any(str(v).strip() in ("NÚM", "NUM") for v in row_vals if v):
                     ws_src = ws_candidate
                     header_row_src = r_idx
                     break
-            if ws_src: break
+            if ws_src:
+                break
 
         if not ws_src:
-            raise HTTPException(400, "No se encontró hoja con formato de audiencias (NÚM, CARPETA, etc.)")
+            raise HTTPException(
+                400,
+                "No se encontró hoja con formato de audiencias (NÚM, CARPETA, etc.)",
+            )
 
         # Leer encabezados fuente
         src_headers = [
             str(c.value).strip() if c.value else ""
-            for c in list(ws_src.iter_rows(
-                min_row=header_row_src, max_row=header_row_src))[0][:12]
+            for c in list(
+                ws_src.iter_rows(min_row=header_row_src, max_row=header_row_src)
+            )[0][:12]
         ]
 
         # Claves ya existentes en tablero
@@ -2532,18 +3199,21 @@ async def upload_y_actualizar_aud(file: UploadFile = File(...)):
         # Última fila con datos en tablero
         last_row = 9
         for row in ws_tab.iter_rows(min_row=10):
-            if any(c.value for c in row): last_row = row[0].row
+            if any(c.value for c in row):
+                last_row = row[0].row
 
         added = 0
         skipped = 0
         thin = Side(style="thin", color="CCCCCC")
         data_border = Border(left=thin, right=thin, top=thin, bottom=thin)
-        data_align  = Alignment(wrap_text=True, vertical="top")
+        data_align = Alignment(wrap_text=True, vertical="top")
 
         for row in ws_src.iter_rows(min_row=header_row_src + 1, values_only=True):
-            if not any(row): continue
+            if not any(row):
+                continue
             vals = list(row[:12])
-            if not any(vals): continue
+            if not any(vals):
+                continue
 
             key = _aud_row_key(tuple(vals), src_headers)
             if not key.strip("|") or key in existing_keys:
@@ -2556,8 +3226,11 @@ async def upload_y_actualizar_aud(file: UploadFile = File(...)):
                 # Buscar valor por nombre de columna
                 val = ""
                 for src_idx, src_col_name in enumerate(src_headers):
-                    if src_col_name.strip() == dst_col_name.strip() or \
-                       src_col_name.strip().rstrip() == dst_col_name.strip().rstrip():
+                    if (
+                        src_col_name.strip() == dst_col_name.strip()
+                        or src_col_name.strip().rstrip()
+                        == dst_col_name.strip().rstrip()
+                    ):
                         val = vals[src_idx] if src_idx < len(vals) else ""
                         break
                 if not val and dst_idx <= len(vals):
@@ -2565,10 +3238,11 @@ async def upload_y_actualizar_aud(file: UploadFile = File(...)):
 
                 cell = ws_tab.cell(row=last_row, column=dst_idx, value=val)
                 cell.alignment = data_align
-                cell.border    = data_border
+                cell.border = data_border
                 # Alternar color de fila
                 if last_row % 2 == 0:
                     from openpyxl.styles import PatternFill
+
                     cell.fill = PatternFill("solid", fgColor="EEF3F8")
 
             existing_keys.add(key)
@@ -2577,7 +3251,9 @@ async def upload_y_actualizar_aud(file: UploadFile = File(...)):
         # Actualizar metadatos en encabezado
         now = dt2.now().strftime("%Y-%m-%d %H:%M")
         ws_tab["D6"] = now
-        ws_tab["K6"] = sum(1 for row in ws_tab.iter_rows(min_row=10, values_only=True) if any(row))
+        ws_tab["K6"] = sum(
+            1 for row in ws_tab.iter_rows(min_row=10, values_only=True) if any(row)
+        )
 
         wb_tab.save(TABLERO_AUD_PATH)
         return {
@@ -2589,8 +3265,10 @@ async def upload_y_actualizar_aud(file: UploadFile = File(...)):
             "actualizado": now,
         }
 
-    except HTTPException: raise
-    except Exception as e: raise HTTPException(500, str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
 
 
 @app.post("/api/tablero-aud/agregar-texto")
@@ -2615,47 +3293,59 @@ async def agregar_texto_a_tablero_aud(req: AudienciaRequest):
         existing_keys = _get_aud_existing_keys(ws)
         last_row = 9
         for row in ws.iter_rows(min_row=10):
-            if any(c.value for c in row): last_row = row[0].row
+            if any(c.value for c in row):
+                last_row = row[0].row
 
         # Construir fila a partir de campos parseados
-        num_actual = sum(1 for row in ws.iter_rows(min_row=10, values_only=True) if any(row)) + 1
+        num_actual = (
+            sum(1 for row in ws.iter_rows(min_row=10, values_only=True) if any(row)) + 1
+        )
         # Nota: parser v4 usa "FECHA " (con espacio) para coincidir con columna Excel
         fecha_val = campos.get("FECHA ", campos.get("FECHA", ""))
         row_data = {
-            "NÚM":             str(num_actual),
-            "FECHA ":          fecha_val,
-            "HORA":            campos.get("HORA",""),
-            "CARPETA DE INV.": campos.get("CARPETA DE INV.", campos.get("NÚM DE CARPETA","")),
-            "CAUSA PENAL":     campos.get("CAUSA PENAL",""),
-            "MUNICIPIO":       campos.get("MUNICIPIO","JALPA DE MENDEZ"),
-            "VICTIMAS (S)":    campos.get("VICTIMAS (S)", campos.get("VÍCTIMA U OFENDIDO","")),
-            "DELITO":          campos.get("DELITO",""),
-            "IMPUTADOS (S)":   campos.get("IMPUTADOS (S)", campos.get("IMPUTADO","")),
-            "TIPO DE AUDIENCIA": campos.get("TIPO DE AUDIENCIA",""),
-            "RESOLUCION":      campos.get("RESOLUCION",""),
-            "FISCAL":          campos.get("FISCAL",""),
+            "NÚM": str(num_actual),
+            "FECHA ": fecha_val,
+            "HORA": campos.get("HORA", ""),
+            "CARPETA DE INV.": campos.get(
+                "CARPETA DE INV.", campos.get("NÚM DE CARPETA", "")
+            ),
+            "CAUSA PENAL": campos.get("CAUSA PENAL", ""),
+            "MUNICIPIO": campos.get("MUNICIPIO", "JALPA DE MENDEZ"),
+            "VICTIMAS (S)": campos.get(
+                "VICTIMAS (S)", campos.get("VÍCTIMA U OFENDIDO", "")
+            ),
+            "DELITO": campos.get("DELITO", ""),
+            "IMPUTADOS (S)": campos.get("IMPUTADOS (S)", campos.get("IMPUTADO", "")),
+            "TIPO DE AUDIENCIA": campos.get("TIPO DE AUDIENCIA", ""),
+            "RESOLUCION": campos.get("RESOLUCION", ""),
+            "FISCAL": campos.get("FISCAL", ""),
         }
 
         key = f"{row_data['CARPETA DE INV.']}|{row_data['TIPO DE AUDIENCIA']}|{row_data['FECHA ']}|{row_data['FISCAL']}"
         if key in existing_keys:
-            return {"status": "duplicado", "message": "Este registro ya existe en el Tablero"}
+            return {
+                "status": "duplicado",
+                "message": "Este registro ya existe en el Tablero",
+            }
 
         thin = Side(style="thin", color="CCCCCC")
         data_border = Border(left=thin, right=thin, top=thin, bottom=thin)
-        data_align  = Alignment(wrap_text=True, vertical="top")
+        data_align = Alignment(wrap_text=True, vertical="top")
 
         new_row = last_row + 1
         for col_idx, col_name in enumerate(AUD_COLUMNS, 1):
             val = row_data.get(col_name, "")
             cell = ws.cell(row=new_row, column=col_idx, value=val)
             cell.alignment = data_align
-            cell.border    = data_border
+            cell.border = data_border
             if new_row % 2 == 0:
                 cell.fill = PatternFill("solid", fgColor="EEF3F8")
 
         now = dt2.now().strftime("%Y-%m-%d %H:%M")
         ws["D6"] = now
-        ws["K6"] = sum(1 for row in ws.iter_rows(min_row=10, values_only=True) if any(row))
+        ws["K6"] = sum(
+            1 for row in ws.iter_rows(min_row=10, values_only=True) if any(row)
+        )
         wb.save(TABLERO_AUD_PATH)
 
         return {
@@ -2676,13 +3366,14 @@ async def descargar_tablero_aud():
     return FileResponse(
         TABLERO_AUD_PATH,
         filename="TABLERO_AUDIENCIAS_NEXUS.xlsx",
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
 
 
 @app.get("/api/tablero-aud/preview")
 async def tablero_aud_preview(limit: int = 50):
     import openpyxl
+
     if not os.path.exists(TABLERO_AUD_PATH):
         raise HTTPException(404, "Tablero no existe")
     try:
@@ -2713,4 +3404,3 @@ if __name__ == "__main__":
     print("  NO CIERRE ESTA VENTANA")
     print("=" * 52)
     uvicorn.run(app, host=host, port=port, log_level="warning")
-

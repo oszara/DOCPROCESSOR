@@ -2,10 +2,11 @@
 nexus_setup.py — Instalador automático de NEXUS Ω
 Se ejecuta la primera vez y prepara todo lo necesario.
 """
+
 import sys, os, subprocess, urllib.request, time, winreg, shutil
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MARKER   = os.path.join(BASE_DIR, ".nexus_listo")
+MARKER = os.path.join(BASE_DIR, ".nexus_listo")
 
 # ── Tesseract OCR portable ────────────────────────────────────────────────────
 TESS_DIR = os.path.join(BASE_DIR, "tesseract")
@@ -22,8 +23,8 @@ DEPENDENCIAS = [
     "python-multipart",
     "pystray",
     "pillow",
-    "pytesseract",        # interfaz Python → Tesseract
-    "opencv-python",      # preprocesamiento de imagen para mejor OCR
+    "pytesseract",  # interfaz Python → Tesseract
+    "opencv-python",  # preprocesamiento de imagen para mejor OCR
 ]
 
 PYTHON_INSTALLER_URL = (
@@ -44,8 +45,8 @@ def titulo(msg: str):
 
 def paso(n: int, total: int, msg: str):
     bar_len = 30
-    filled  = int(bar_len * n / total)
-    bar     = "█" * filled + "░" * (bar_len - filled)
+    filled = int(bar_len * n / total)
+    bar = "█" * filled + "░" * (bar_len - filled)
     print(f"\n  [{bar}]  Paso {n}/{total}")
     print(f"  ▶ {msg}")
 
@@ -55,8 +56,7 @@ def python_en_path() -> str | None:
     for cmd in ["python", "python3", "py"]:
         try:
             r = subprocess.run(
-                [cmd, "--version"],
-                capture_output=True, text=True, timeout=5
+                [cmd, "--version"], capture_output=True, text=True, timeout=5
             )
             if r.returncode == 0 and "Python 3" in r.stdout + r.stderr:
                 return cmd
@@ -70,10 +70,13 @@ def descargar_python():
     print("  Por favor no cierre esta ventana.\n")
     try:
         urllib.request.urlretrieve(
-            PYTHON_INSTALLER_URL, PYTHON_INSTALLER_LOCAL,
-            reporthook=lambda b, bs, ts: print(
-                f"  {min(100, int(b * bs * 100 / ts))}%   ", end="\r"
-            ) if ts > 0 else None
+            PYTHON_INSTALLER_URL,
+            PYTHON_INSTALLER_LOCAL,
+            reporthook=lambda b, bs, ts: (
+                print(f"  {min(100, int(b * bs * 100 / ts))}%   ", end="\r")
+                if ts > 0
+                else None
+            ),
         )
         print("\n  Descarga completa.")
         return True
@@ -85,12 +88,14 @@ def descargar_python():
 def instalar_python():
     """Instala Python silenciosamente con pip incluido."""
     print("\n  Instalando Python 3.12 en tu computadora...")
-    print("  (Se instalará solo para este usuario, sin necesitar permisos de administrador)")
+    print(
+        "  (Se instalará solo para este usuario, sin necesitar permisos de administrador)"
+    )
     args = [
         PYTHON_INSTALLER_LOCAL,
         "/quiet",
-        "InstallAllUsers=0",      # solo este usuario
-        "PrependPath=1",           # agregar al PATH automáticamente
+        "InstallAllUsers=0",  # solo este usuario
+        "PrependPath=1",  # agregar al PATH automáticamente
         "Include_pip=1",
         "Include_launcher=1",
         "Include_tcltk=0",
@@ -117,10 +122,19 @@ def instalar_dependencias(python_cmd: str):
         print(f"  Instalando {paquete}...  ({i}/{total})", end=" ", flush=True)
         try:
             r = subprocess.run(
-                [python_cmd, "-m", "pip", "install", paquete,
-                 "--quiet", "--disable-pip-version-check",
-                 "--no-warn-script-location"],
-                capture_output=True, text=True, timeout=120
+                [
+                    python_cmd,
+                    "-m",
+                    "pip",
+                    "install",
+                    paquete,
+                    "--quiet",
+                    "--disable-pip-version-check",
+                    "--no-warn-script-location",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=120,
             )
             if r.returncode == 0:
                 print("✓")
@@ -188,13 +202,16 @@ def descargar_tesseract_portable() -> bool:
             break
 
     if not ok:
-        print("  ⚠ No se pudo descargar Tesseract (sin internet o bloqueado por firewall).")
+        print(
+            "  ⚠ No se pudo descargar Tesseract (sin internet o bloqueado por firewall)."
+        )
         print("  El sistema funcionará sin OCR — puedes pegar texto directamente.")
         return False
 
     # Descomprimir
     try:
         import zipfile
+
         print("  Descomprimiendo...")
         os.makedirs(TESS_DIR, exist_ok=True)
         with zipfile.ZipFile(TESS_ZIP, "r") as z:
@@ -242,17 +259,18 @@ def crear_acceso_directo():
     """Crea acceso directo en el Escritorio apuntando a NEXUS_INICIAR.bat."""
     try:
         import winreg
+
         escritorio = os.path.join(os.path.expanduser("~"), "Desktop")
         if not os.path.exists(escritorio):
             # Intentar obtener desde registro
             with winreg.OpenKey(
                 winreg.HKEY_CURRENT_USER,
-                r"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders"
+                r"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders",
             ) as k:
                 escritorio = winreg.QueryValueEx(k, "Desktop")[0]
 
         acceso = os.path.join(escritorio, "NEXUS Omega.lnk")
-        bat    = os.path.join(BASE_DIR, "NEXUS_INICIAR.bat")
+        bat = os.path.join(BASE_DIR, "NEXUS_INICIAR.bat")
 
         # Crear .lnk con WScript
         vbs = f"""
@@ -268,8 +286,9 @@ oLink.Save
         vbs_path = os.path.join(BASE_DIR, "_crear_acceso.vbs")
         with open(vbs_path, "w", encoding="utf-8") as f:
             f.write(vbs)
-        subprocess.run(["wscript", "//nologo", vbs_path],
-                       capture_output=True, timeout=10)
+        subprocess.run(
+            ["wscript", "//nologo", vbs_path], capture_output=True, timeout=10
+        )
         os.remove(vbs_path)
         print("  ✓ Acceso directo creado en el Escritorio")
         return True
